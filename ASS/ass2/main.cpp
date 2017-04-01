@@ -20,8 +20,7 @@ int size_recorder[MAX_NUM_OF_INDEX];
 int main(int argc, char* argv[]) {
 
     /* initialized */
-    string input_file = argv[1];
-    string index_file = argv[2];
+    string input_file = argv[1], index_file = argv[2];
     if (argc <= 3)
         return -1;
     string pattern[argc-3];
@@ -29,31 +28,14 @@ int main(int argc, char* argv[]) {
         pattern[i-2] = argv[i];
 
     map<char, int> count_map = build_index(input_file, index_file);
+
+
     for( map<char,int>::iterator it = count_map.begin(); it != count_map.end(); ++it)
         cout<<"key: "<<it->first <<" value: "<<it->second<<endl;
 
     return 0;
 }
 
-int build_occ(char a, int flag, ofstream index_file = NULL){
-    if(flag){
-        /*
-         * write occ_counter into index file and use size_recorder to record current position of each occ_counter
-         */
-        int size = sizeof('a')*3;
-        int total_size = size_recorder[flag-1];
-        for(map<char,int>::iterator it = occ_counter.begin(); it != occ_counter.end(); ++it){
-            index_file<<it->first<<" "<<it->second<<endl;
-            total_size += size;
-        }
-        size_recorder[flag] = total_size;
-        occ_counter.clear();
-        return 0;
-    }
-
-    occ_counter[a] += 1;
-    return 0;
-}
 
 map<char, int> build_index(string input_file, string output_file){
     ifstream my_file;
@@ -66,13 +48,22 @@ map<char, int> build_index(string input_file, string output_file){
     int i=0, j=0;
     while(my_file.get(a)){
         count_list[a]++;
-        build_occ(a, 0);
-
+        occ_counter[a] += 1;
         i++;
+
         if(i>K_value){
-            build_occ(NULL, j, index_file);
+
+            int size = sizeof('a')*3;
+            int total_size = size_recorder[j-1];
+            for(map<char,int>::iterator it = occ_counter.begin(); it != occ_counter.end(); ++it){
+                index_file<<it->first<<" "<<it->second<<endl;
+                total_size += size;
+            }
+            size_recorder[j] = total_size;
+            occ_counter.clear();
             j++;
         }
+
     }
 
 
