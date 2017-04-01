@@ -4,6 +4,7 @@
 #include <map>
 
 const int K_value = 1000;
+const int MAX_NUM_OF_INDEX = 1000;
 
 using namespace std;
 /*
@@ -13,7 +14,8 @@ using namespace std;
  */
 
 map<char, int> build_index(string input_file,string index_file);
-
+map<char, int> occ_counter;
+int size_recorder[MAX_NUM_OF_INDEX];
 
 int main(int argc, char* argv[]) {
 
@@ -33,6 +35,25 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
+int build_occ(char a, int flag, ofstream index_file = NULL){
+    if(flag){
+        /*
+         * write occ_counter into index file and use size_recorder to record current position of each occ_counter
+         */
+        int size = sizeof('a')*3;
+        int total_size = size_recorder[flag-1];
+        for(map<char,int>::iterator it = occ_counter.begin(); it != occ_counter.end(); ++it){
+            index_file<<it->first<<" "<<it->second<<endl;
+            total_size += size;
+        }
+        size_recorder[flag] = total_size;
+        occ_counter.clear();
+        return 0;
+    }
+
+    occ_counter[a] += 1;
+    return 0;
+}
 
 map<char, int> build_index(string input_file, string output_file){
     ifstream my_file;
@@ -42,11 +63,15 @@ map<char, int> build_index(string input_file, string output_file){
 
     map<char, int> count_list;
     char a;
-    int i=0;
+    int i=0, j=0;
     while(my_file.get(a)){
         count_list[a]++;
-        if(i>K_value){
+        build_occ(a, 0);
 
+        i++;
+        if(i>K_value){
+            build_occ(NULL, j, index_file);
+            j++;
         }
     }
 
@@ -64,30 +89,3 @@ map<char, int> build_index(string input_file, string output_file){
     return count_list;
 }
 
-string bwt(string input_line){
-
-    char ch = input_line[0];
-    int i=0;
-    while(ch != ']'){
-        i++;
-        ch = input_line[i];
-    }
-
-    string prefix = input_line.substr(0, i);
-    string word = input_line.substr(i);
-    static int size = word.length();
-    string matrix[size];
-    string temp = word;
-    for(int j=0;j<size;j++){
-        matrix[j] = temp;
-        temp = temp.substr(j);
-    }
-    return 0;
-
-}
-void print_result(){}
-
-int load_data(string input_file){
-
-    return 0;
-}
