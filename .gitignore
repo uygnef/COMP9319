@@ -264,3 +264,5 @@ fabric.properties
 *.bwt
 
 ASS/*/cmake-build-debug/*
+*.xml
+ASS/ass2/.idea/workspace.xml
