@@ -2,6 +2,7 @@
 #include <fstream>
 #include <cstring>
 #include <map>
+#include <vector>
 
 const int K_value = 10;
 const int MAX_NUM_OF_INDEX = 1000;
@@ -16,6 +17,7 @@ using namespace std;
 map<char, int> build_index(string input_file,string index_file);
 map<char, int> occ_counter;
 map<char, int> get_C_from_index_file(string index_file);
+int backward_search(vector<string> pattern, map<char, int> count_map);
 
 int main(int argc, char* argv[]) {
 
@@ -23,19 +25,23 @@ int main(int argc, char* argv[]) {
     string input_file = argv[1], index_file = argv[2];
     if (argc <= 3)
         return -1;
-    string pattern[argc-3];
-    for(int i=2; i<argc; i++)
-        pattern[i-2] = argv[i];
+    vector<string> pattern(argc-3);
+    for(int i=3; i<argc; i++)
+        pattern[i-3] = argv[i];
+
+    /*create index file*/
     fstream  _file;
     _file.open(index_file,ios::in);
     map<char, int> count_map;
-    if(!_file)
+    if(!_file)                                             //if index file do not exist, build it. otherwise read Count map from it.
         count_map = build_index(input_file, index_file);
     else
         count_map = get_C_from_index_file(index_file);
     
     for( map<char,int>::iterator it = count_map.begin(); it != count_map.end(); ++it)
         cout<<"key: "<<it->first <<" value: "<<it->second<<endl;
+
+    backward_search(pattern, count_map);
 
     return 0;
 }
@@ -123,3 +129,20 @@ map<char, int> get_C_from_index_file(string index_file) //copy from http://stack
     return C;
 }
 
+int backward_search(vector<string> pattern_list,  map<char, int> count_map) {
+    for (int i = 0; i < pattern_list.size(); i++) {
+        string pattern = pattern_list[i];
+        int j = pattern.size();
+        char c = pattern[j];
+        int first = count_map[c] + 1;
+        int last = count_map[c+1];
+        while (j > 1 && first<last) {
+            c = pattern[j-1];
+            first = count_map[c] + occ(c, first-1) + 1;
+            last = count_map[c] + occ(c, last);
+            j--;
+            if(last<first)
+                return NULL;
+        }
+    }
+}
