@@ -32,6 +32,10 @@ void encode(FILE *input, FILE *output, int print_flag){
             counter++;
         }
     }
+	if(counter == -1){
+		print_flag ? printf("%c",pre_data)\
+		:fputc((unsigned char)pre_data, output);
+	return;}
     if(counter != -2)
         print_flag ? printf("[%d]", counter) : int_to_my_type(counter, output);
 }
