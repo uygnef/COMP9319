@@ -1,10 +1,11 @@
 #include <iostream>
 #include <fstream>
-#include <cstring>
 #include <map>
 #include <vector>
 
-const int BLOCK_BYTES = 1000;
+#define LAST_CHAR 127
+
+const int BYTES_OF_BLOCK = 1000;
 const int MAX_NUM_OF_INDEX = 1000;
 
 using namespace std;
@@ -65,7 +66,7 @@ int build_index(string input_file, string output_file){
         occ_counter[a] += 1;
         i++;
 
-        if(i>BLOCK_BYTES){
+        if(i>=BYTES_OF_BLOCK){
 /*
  * index_file's format: ASCII number of char  (space)  occ number  .....
  *                              10                          1      .....
@@ -88,12 +89,9 @@ int build_index(string input_file, string output_file){
         pre_end += temp;
         index_file<<int(it->first)<<" "<<it->second<<" ";
     }
-
+    index_file<<127<<" "<<pre_end; //add the ending character(NO.127) to index, like $ in bwt encode.
     return 0;
 }
-
-
-
 
 map<char, int> get_C_from_index_file(string index_file) //copy from http://stackoverflow.com/questions/11876290/c-fastest-way-to-read-only-last-line-of-text-file
 {
@@ -150,10 +148,32 @@ int search(vector<string> pattern_list, string bwt_file, string index_file){
 
 vector<string> get_result(string pattern, string input_file, string _index_file) {
 
-    int j = pattern.size();
-    char c = pattern[j];
+    int curt_pos = pattern.size() - 1;
+    char c = pattern[curt_pos];
     int first = count_map[c] + 1;
-    int last = count_map[c+1];
+
+    if(first == 0){
+        printf("NO SUCH pattern \n");
+        return NULL;
+    }
+
+    int last = 0;
+    char d = c+1;
+    auto next_char = count_map.find(d);
+    while(true){ //get next char in map
+        if(d == LAST_CHAR){
+            last = count_map[(char)LAST_CHAR] - 1; //this is the last element.
+            break;
+        }
+        if(next_char != count_map.end()){
+            last = count_map[d];
+            break;
+        }
+
+        d++;
+        next_char = count_map.find(d);
+    }
+
 //load index file
     fstream index_file;
     index_file.open(_index_file);
@@ -162,16 +182,14 @@ vector<string> get_result(string pattern, string input_file, string _index_file)
     bwt_file.open(input_file);
     vector<string> result; //list to store full string(from [] to end)
 
-    while (j >= 1 && first<last) {
-        c = pattern[j-1];
+    while (curt_pos >= 1 && first < last) {
+        c = pattern[curt_pos-1]; //go to pre char in pattern
         first = count_map[c] + occ(c, first-1, bwt_file, index_file) + 1;
         last = count_map[c] + occ(c, last, bwt_file, index_file);
-        j--;
+        curt_pos--;
         if(last<first)
             return NULL;
     }
-
-
 
     for(int i = first; i <= last; ++i){
         string full_word;
@@ -181,7 +199,6 @@ vector<string> get_result(string pattern, string input_file, string _index_file)
         int pre_ch_num;
         int next_ch_num;
         while(pre_ch != '[') {
-
             pre_ch_num = count_map[pre_ch] + occ(c, pre_ch_num-1, bwt_file, index_file) + 1;
             bwt_file.seekg(pre_ch_num,ios::beg);
             bwt_file >> noskipws >> pre_ch;
@@ -203,30 +220,46 @@ vector<string> get_result(string pattern, string input_file, string _index_file)
 
 int occ(char ch, int num, fstream& bwt_file, fstream& index_file){
 
-    int line_num = num / BLOCK_BYTES;
+    int line_num = num / BYTES_OF_BLOCK;
     int i = 0;
-    string line;
-    while(i < line_num){
-        getline(index_file, line);
+   //loop to the target line
+    string temp;
+    while(i < line_num ){
+        getline(index_file, temp);
         i++;
+        //weak constrain, need to fix
+        //TODO: fix it
+        if(index_file.eof()){
+            printf("NUM OUT OF INDEX");
+            return -1;
+        }
     }
 
-    int key, value;
+    int key, value, temp_key=0;
     map<char, int> last_index;
 
 //get nearest index bucket
     while(1){
         index_file>>key>>value;
+
+        if(temp_key > key){ //previous block do not have this character
+            value = 0;
+            break;
+        }
+        temp_key = key;
         if(key == (int)ch)
             break;
     }
 
-    int extra_num = num % BLOCK_BYTES;
-    bwt_file.seekg(line_num - extra_num,ios::beg);
+    int extra_num = num % BYTES_OF_BLOCK;
+    bwt_file.seekg(line_num*BYTES_OF_BLOCK,ios::beg);
+    char bwt_ch;
     for(int i=0; i<extra_num; ++i){
-        bwt_file>>noskipws>>key;
-        if(key == ch)
+        bwt_file>>noskipws>>bwt_ch;
+        if(bwt_ch == ch)
             value++;
+        if(bwt_ch == EOF)//TODO: in case out of index
+            break;
     }
     return value;
 }
