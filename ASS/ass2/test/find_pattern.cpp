@@ -172,11 +172,41 @@ string backward_search(int i, string pattern, fstream& bwt_file, fstream& index_
         printf("*******pre_ch_num: %d\tpre_ch %d", pre_ch_num, pre_ch);
     }
     full_word = pre_ch + full_word;
+    char suff_ch = get_char(i, bwt_file);
+    int next_ch_num = i;
+    while(suff_ch != '['){
+        n_ch = next_ch_num - count_map[suff_ch];
+        next_ch_num = occ(suff_ch, next_ch_num, bwt_file, index_file) + count_map[suff_ch];
+        suff_ch = get_char(next_ch_num, bwt_file);
+        full_word = full_word + suff_ch;
+        cout<<"~~~~~~~~~~~~~~~~~~~~"<<suff_ch<<endl;
+    }
     cout << endl<<endl<<"________________"<<endl <<"full word is: " <<full_word<<endl;
     return full_word;
 }
 
-
+int find_i_char(int i, char ch, fstream& bwtfile, fstream& index_file){
+    int result = 0;
+    int temp_num = 0;
+    index_file.clear();
+    char key;
+    int value;
+    char space;
+    string line;
+    std::istringstream str;
+    while(temp_num < i && getline(index_file, line)){
+        istringstream iss(line);  
+        if(!(iss>>key>>value))
+            break;
+        if(key == ch){
+            temp_num = value;
+            if(temp_num > i)
+                break;
+            result = temp_num;
+            continue;
+        }
+    }
+}
 char get_char(int i, fstream& bwtfile){
     bwtfile.clear();
     bwtfile.seekg(i-1, ios::beg);

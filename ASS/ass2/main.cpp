@@ -229,6 +229,18 @@ string backward_search(int i, string pattern, fstream& bwt_file, fstream& index_
     return full_word;
 }
 
+
+string forward_search(int i, fstream& bwt_file, fstream& index_file){
+
+    char ch = get_char(i, bwt_file);
+    int next_num;
+    while(ch != '['){
+        next_num = occ(ch , i, bwt_file, index_file) + i;
+        ch = get_char(next_num, bwt_file);
+    }
+}
+
+
 char get_char(int i, fstream& bwtfile){
     bwtfile.clear();
     bwtfile.seekg(i-1, ios::beg);
@@ -243,11 +255,10 @@ int occ(char ch, int num, fstream& bwt_file, fstream& index_file){
     int i = 0;
    //loop to the target line
     string temp;
+    index_file.clear();
     while(i < line_num ){
         getline(index_file, temp);
         i++;
-        //weak constrain, need to fix
-        //TODO: fix it
         if(index_file.eof()){
             printf("NUM OUT OF INDEX");
             return -1;
@@ -258,7 +269,7 @@ int occ(char ch, int num, fstream& bwt_file, fstream& index_file){
     map<char, int> last_index;
 
 //get nearest index bucket
-    while(1){
+    while(line_num != 0){ //if num < BYTES_OF_BLOCK just skip
         index_file>>key>>value;
 
         if(temp_key > key){ //previous block do not have this character
@@ -274,11 +285,11 @@ int occ(char ch, int num, fstream& bwt_file, fstream& index_file){
     bwt_file.seekg(line_num*BYTES_OF_BLOCK,ios::beg);
     char bwt_ch;
     for(int i=0; i<extra_num; ++i){
+        if(bwt_ch == EOF)//TODO: in case out of index
+            break;
         bwt_file>>noskipws>>bwt_ch;
         if(bwt_ch == ch)
             value++;
-        if(bwt_ch == EOF)//TODO: in case out of index
-            break;
     }
     return value;
 }
