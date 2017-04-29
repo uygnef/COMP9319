@@ -23,8 +23,8 @@ map<char, int> count_map;
 
 vector<string> get_result(string pattern, string input_file, string _index_file);
 int search(vector<string> pattern_list, string bwt_file, string index_file);
-int occ(char ch, int num, fstream& index_file);
-
+int occ(char ch, int num, fstream& bwt_file, fstream& index_file);
+char get_char(int i, fstream& bwtfile);
 
 int main(int argc, char* argv[]) {
 
@@ -150,7 +150,7 @@ vector<string> get_result(string pattern, string input_file, string _index_file)
 
     int curt_pos = pattern.size() - 1;
     char c = pattern[curt_pos];
-    int first = count_map[c] + 1;
+    int first = count_map[c];
 
     if(first == 0){
         printf("NO SUCH pattern \n");
@@ -182,10 +182,10 @@ vector<string> get_result(string pattern, string input_file, string _index_file)
     bwt_file.open(input_file);
     vector<string> result; //list to store full string(from [] to end)
 
-    while (curt_pos >= 1 && first < last) {
+    while (curt_pos >= 1 && first <= last) {
         c = pattern[curt_pos-1]; //go to pre char in pattern
-        first = count_map[c] + occ(c, first-1, bwt_file, index_file) + 1;
-        last = count_map[c] + occ(c, last, bwt_file, index_file);
+        first = count_map[c] + occ(c, first-1, bwt_file, index_file);
+        last = count_map[c] + occ(c, last, bwt_file, index_file) - 1;
         curt_pos--;
         if(last<first)
             return NULL;
@@ -195,28 +195,36 @@ vector<string> get_result(string pattern, string input_file, string _index_file)
         string full_word;
 //backward search find first part
         char next_ch;
-        char pre_ch;
-        int pre_ch_num;
+        char pre_ch = get_char(i, bwt_file);
+        int pre_ch_num = i;
         int next_ch_num;
         while(pre_ch != '[') {
-            pre_ch_num = count_map[pre_ch] + occ(c, pre_ch_num-1, bwt_file, index_file) + 1;
-            bwt_file.seekg(pre_ch_num,ios::beg);
-            bwt_file >> noskipws >> pre_ch;
             full_word = pre_ch + full_word;
+            pre_ch_num = count_map[pre_ch] + occ(c, pre_ch_num, bwt_file, index_file) - 1;
+            pre_ch = get_char(pre_ch_num, bwt_file);
         }
 //forward search find last part
         while(next_ch != '['){
             next_ch_num = count_map[next_ch] - occ(next_ch, first - 1, bwt_file, index_file) + 1;
             bwt_file.seekg(next_ch_num,ios::beg);
+            printf("\n***************\n");
             bwt_file >> noskipws >> next_ch;
+            cout<<next_ch;
             full_word += next_ch;
         }
-        result[i] = full_word;
+     //   result[i] = full_word;
     }
-    bwt_file.close();
+ //   bwt_file.close();
 }
 
 
+char get_char(int i, fstream& bwtfile){
+    bwtfile.clear();
+    bwtfile.seekg(i-1, ios::beg);
+    char val;
+    bwtfile >> noskipws>>val;
+    return val;
+}
 
 int occ(char ch, int num, fstream& bwt_file, fstream& index_file){
 
