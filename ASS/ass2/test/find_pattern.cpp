@@ -21,6 +21,7 @@ map<char, int> count_map;
 int occ(char ch, int num, fstream& bwt_file, fstream& index_file);
 int get_result(string pattern, string input_file, string _index_file);
 char get_char(int i, fstream& bwtfile);
+string backward_search(int i, string pattern, fstream& bwt_file, fstream& index_file);
 
 int main(int argc, char* argv[]) {
 
@@ -148,26 +149,33 @@ int get_result(string pattern, string input_file, string _index_file) {
         printf("curt_pos is %d\n", curt_pos);
         curt_pos--;
     }
+
+
     for(int i = first; i <= last; i++) {
-        printf("****first %d last %d, i %d", first, last, i);
-        string full_word;
-        full_word.assign(pattern, 0 , 1);
-        cout<<"***\n"<<full_word<<"\n";
-//backward search find first part
-        char pre_ch = get_char(i, bwt_file);
-        int pre_ch_num = i;
-        while (pre_ch != '[') {
-            full_word = pre_ch + full_word;
-            pre_ch_num = count_map[pre_ch] + occ(pre_ch, pre_ch_num , bwt_file, index_file) - 1;
-            pre_ch = get_char(pre_ch_num, bwt_file);
-            printf("*******pre_ch_num: %d\tpre_ch %d", pre_ch_num, pre_ch);
-        }
-        full_word = pre_ch + full_word;
-        cout << endl<<endl<<"________________"<<endl <<"full word is: " <<full_word<<endl;
+        string match_prefix = backward_search(i, pattern, bwt_file, index_file);
     }
 
     return 0;
 }
+
+string backward_search(int i, string pattern, fstream& bwt_file, fstream& index_file){
+    string full_word;
+    full_word.assign(pattern, 0 , 1);
+    cout<<"***\n"<<full_word<<"\n";
+//backward search find first part
+    char pre_ch = get_char(i, bwt_file);
+    int pre_ch_num = i;
+    while (pre_ch != '[') {
+        full_word = pre_ch + full_word;
+        pre_ch_num = count_map[pre_ch] + occ(pre_ch, pre_ch_num , bwt_file, index_file) - 1;
+        pre_ch = get_char(pre_ch_num, bwt_file);
+        printf("*******pre_ch_num: %d\tpre_ch %d", pre_ch_num, pre_ch);
+    }
+    full_word = pre_ch + full_word;
+    cout << endl<<endl<<"________________"<<endl <<"full word is: " <<full_word<<endl;
+    return full_word;
+}
+
 
 char get_char(int i, fstream& bwtfile){
     bwtfile.clear();

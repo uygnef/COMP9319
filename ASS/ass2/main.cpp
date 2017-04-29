@@ -25,6 +25,7 @@ vector<string> get_result(string pattern, string input_file, string _index_file)
 int search(vector<string> pattern_list, string bwt_file, string index_file);
 int occ(char ch, int num, fstream& bwt_file, fstream& index_file);
 char get_char(int i, fstream& bwtfile);
+string backward_search(int i, string pattern, fstream& bwt_file, fstream& index_file);
 
 int main(int argc, char* argv[]) {
 
@@ -192,18 +193,11 @@ vector<string> get_result(string pattern, string input_file, string _index_file)
     }
 
     for(int i = first; i <= last; ++i){
-        string full_word;
-//backward search find first part
-        char next_ch;
-        char pre_ch = get_char(i, bwt_file);
-        int pre_ch_num = i;
+        string full_word = backward_search(i, pattern, bwt_file, index_file);
+
+        //forward search find last part
         int next_ch_num;
-        while(pre_ch != '[') {
-            full_word = pre_ch + full_word;
-            pre_ch_num = count_map[pre_ch] + occ(c, pre_ch_num, bwt_file, index_file) - 1;
-            pre_ch = get_char(pre_ch_num, bwt_file);
-        }
-//forward search find last part
+        char next_ch;
         while(next_ch != '['){
             next_ch_num = count_map[next_ch] - occ(next_ch, first - 1, bwt_file, index_file) + 1;
             bwt_file.seekg(next_ch_num,ios::beg);
@@ -217,6 +211,23 @@ vector<string> get_result(string pattern, string input_file, string _index_file)
  //   bwt_file.close();
 }
 
+string backward_search(int i, string pattern, fstream& bwt_file, fstream& index_file){
+    string full_word;
+    full_word.assign(pattern, 0 , 1);
+ //   cout<<"***\n"<<full_word<<"\n";
+//backward search find first part
+    char pre_ch = get_char(i, bwt_file);
+    int pre_ch_num = i;
+    while (pre_ch != '[') {
+        full_word = pre_ch + full_word;
+        pre_ch_num = count_map[pre_ch] + occ(pre_ch, pre_ch_num , bwt_file, index_file) - 1;
+        pre_ch = get_char(pre_ch_num, bwt_file);
+ //       printf("*******pre_ch_num: %d\tpre_ch %d", pre_ch_num, pre_ch);
+    }
+    full_word = pre_ch + full_word;
+  //  cout << endl<<endl<<"________________"<<endl <<"full word is: " <<full_word<<endl;
+    return full_word;
+}
 
 char get_char(int i, fstream& bwtfile){
     bwtfile.clear();
