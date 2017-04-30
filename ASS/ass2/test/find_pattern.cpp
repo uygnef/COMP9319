@@ -22,10 +22,12 @@ int occ(char ch, int num, fstream& bwt_file, fstream& index_file);
 int get_result(string pattern, string input_file, string _index_file);
 char get_char(int i, fstream& bwtfile);
 string backward_search(int i, string pattern, fstream& bwt_file, fstream& index_file);
+int find_i_char(int i, char ch, fstream& bwtfile, fstream& index_file);
+char the_i_th_char(int& i);
+string forward_search(int i, fstream& bwt_file, fstream& index_file);
+
 
 int main(int argc, char* argv[]) {
-
-    printf("start\n");
 
     /* initialized */
     string input_file = argv[1], index_file = argv[2];
@@ -187,26 +189,45 @@ string backward_search(int i, string pattern, fstream& bwt_file, fstream& index_
 
 int find_i_char(int i, char ch, fstream& bwtfile, fstream& index_file){
     int result = 0;
-    int temp_num = 0;
     index_file.clear();
     char key;
-    int value;
+    int value=0, line_num=0;
     char space;
     string line;
     std::istringstream str;
-    while(temp_num < i && getline(index_file, line)){
-        istringstream iss(line);  
-        if(!(iss>>key>>value))
-            break;
-        if(key == ch){
-            temp_num = value;
-            if(temp_num > i)
-                break;
-            result = temp_num;
-            continue;
+    while(value < i && getline(index_file, line)){
+        line_num++;
+        istringstream iss(line);
+
+        while(iss>>key>>value){
+            if(key == ch) {
+                if (value > i) {
+                    break;
+                }
+                result = value;
+            }
+            if(key>ch) break;
         }
     }
+    line_num--;
+    int ret = line_num*BLOCK_BYTES;
+    bwtfile.clear();
+    bwtfile.seekg(ret);
+    while(result != i){
+        if(result > i){
+            printf("find i char ERR: OUT OF INDEX\n");
+            return -1;
+        }
+        bwtfile>>noskipws>>key;
+        if(key == ch){
+            result++;
+        }
+        ret++;
+    }
+    return ret;
 }
+
+
 char get_char(int i, fstream& bwtfile){
     bwtfile.clear();
     bwtfile.seekg(i-1, ios::beg);
@@ -267,4 +288,69 @@ int occ(char ch, int num, fstream& bwt_file, fstream& index_file){
     }
     cout<<" value:"<<value<<endl;
     return value;
+}
+
+int find_i_char(int i, char ch, fstream& bwtfile, fstream& index_file){
+    int result = 0;
+    index_file.clear();
+    char key;
+    int value=0, line_num=0;
+    char space;
+    string line;
+    istringstream str;
+    while(value < i && getline(index_file, line)){
+        line_num++;
+        istringstream iss(line);
+
+        while(iss>>key>>value){
+            if(key == ch) {
+                if (value > i) {
+                    break;
+                }
+                result = value;
+            }
+            if(key>ch) break;
+        }
+    }
+    line_num--;
+    int ret = line_num*BLOCK_BYTES;
+    bwtfile.clear();
+    bwtfile.seekg(ret);
+    while(result != i){
+        if(result > i){
+            printf("find i char ERR: OUT OF INDEX\n");
+            return -1;
+        }
+        bwtfile>>noskipws>>key;
+        if(key == ch){
+            result++;
+        }
+        ret++;
+    }
+    return ret;
+}
+
+string forward_search(int i, fstream& bwt_file, fstream& index_file){
+    char  ch = the_i_th_char(i);
+    string full_word;
+    while(ch != '['){
+        full_word += ch;
+        i = find_i_char(i, ch, bwt_file, index_file);
+        ch = the_i_th_char(i);
+    }
+    return full_word;
+}
+
+char the_i_th_char(int& i){
+    char ch, temp_ch;
+    int temp_value;
+    for( map<char,int>::iterator it = count_map.begin(); it != count_map.end(); ++it){
+        temp_ch = it->first;
+        temp_value = it->second;
+        if(temp_value > i)
+            break;
+        ch = temp_ch;
+    }
+    i = i - temp_value + 1;
+    return ch;
 }
