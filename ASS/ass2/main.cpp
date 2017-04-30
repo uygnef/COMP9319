@@ -23,14 +23,16 @@ map<char, int> get_C_from_index_file(string index_file);
 map<char, int> count_map;
 
 
-vector<string> get_result(string pattern, string input_file, string _index_file);
+map<string,string> get_result(string pattern, string input_file, string _index_file);
 int search(vector<string> pattern_list, string bwt_file, string index_file);
 int occ(char ch, int num, fstream& bwt_file, fstream& index_file);
 char get_char(int i, fstream& bwtfile);
 int find_i_char(int i, char ch, fstream& bwtfile, fstream& index_file);
 char the_i_th_char(int& i);
-string backward_search(int i, fstream& bwt_file, fstream& index_file);
+string backward_search(int i, fstream& bwt_file, fstream& index_file, string& index);
 string forward_search(int i, fstream& bwt_file, fstream& index_file);
+void find_pattern_in_list(string pattern, map<string, string>& all_data);
+
 
 int main(int argc, char* argv[]) {
 
@@ -138,29 +140,39 @@ map<char, int> get_C_from_index_file(string index_file) //copy from http://stack
 }
 
 int search(vector<string> pattern_list, string bwt_file, string index_file){
-    vector<string> all_data;
+    map<string, string> all_data;
     for (int i = 0; i < pattern_list.size(); i++) {
         string pattern = pattern_list[i];
 
         if(i==0)
             all_data = get_result(pattern, bwt_file, index_file);
         else
-            all_data = _find_pattern_in_list(pattern, all_data);
+            find_pattern_in_list(pattern, all_data);
     }
-    for(int i=0; i<all_data.size();i++)
-        printf("%s", all_data[i]);
+    for( map<string,string>::iterator it = all_data.begin(); it != all_data.end(); ++it) {
+        cout<<"["<<it->first<<"]"<<it->second<<endl;
+    }
     return 0;
 }
 
-vector<string> get_result(string pattern, string input_file, string _index_file) {
+void find_pattern_in_list(string pattern, map<string, string>& all_data){
+    for( map<string,string>::iterator it = all_data.begin(); it != all_data.end(); ++it) {
+        if(it->second.find(pattern) == string::npos){
+            all_data.erase(it->first);
+        }
+    }
+}
+
+
+map<string,string> get_result(string pattern, string input_file, string _index_file) {
 
     int curt_pos = pattern.size() - 1;
     char c = pattern[curt_pos];
     int first = count_map[c];
+    map<string, string> all_match;
 
     if(first == 0){
-        printf("NO SUCH pattern \n");
-        return NULL;
+        return all_match;
     }
 
     int last = 0;
@@ -194,32 +206,39 @@ vector<string> get_result(string pattern, string input_file, string _index_file)
         last = count_map[c] + occ(c, last, bwt_file, index_file) - 1;
         curt_pos--;
         if(last<first)
-            return NULL;
+            return all_match;
     }
 
     for(int i = first; i <= last; ++i){
-        string full_word = backward_search(i, bwt_file, index_file);
+        string index;
+        string full_word = backward_search(i, bwt_file, index_file, index);
         full_word += forward_search(i, bwt_file, index_file);
-        }
-     //   result[i] = full_word;
+        all_match[index] = full_word;
     }
- //   bwt_file.close();
+     //   result[i] = full_word;
+    return all_match;
 }
+ //   bwt_file.close();
 
-string backward_search(int i, fstream& bwt_file, fstream& index_file){
+
+string backward_search(int i, fstream& bwt_file, fstream& index_file, string& index){
     string full_word;
- //   cout<<"***\n"<<full_word<<"\n";
 //backward search find first part
     char pre_ch = get_char(i, bwt_file);
     int pre_ch_num = i;
+    bool is_index = false;
     while (pre_ch != '[') {
-        full_word = pre_ch + full_word;
+        if(pre_ch == ']'){
+            is_index = true;
+        }
+        if(is_index){
+            if(pre_ch != ']') index = pre_ch + index;
+        }else{
+            full_word = pre_ch + full_word;
+        }
         pre_ch_num = count_map[pre_ch] + occ(pre_ch, pre_ch_num , bwt_file, index_file) - 1;
         pre_ch = get_char(pre_ch_num, bwt_file);
- //       printf("*******pre_ch_num: %d\tpre_ch %d", pre_ch_num, pre_ch);
     }
-    full_word = pre_ch + full_word;
-  //  cout << endl<<endl<<"________________"<<endl <<"full word is: " <<full_word<<endl;
     return full_word;
 }
 
@@ -246,36 +265,41 @@ char get_char(int i, fstream& bwtfile){
 int occ(char ch, int num, fstream& bwt_file, fstream& index_file){
 
     int line_num = num / BYTES_OF_BLOCK;
-    int i = 0;
+    int i = 1;
    //loop to the target line
     string temp;
     index_file.clear();
     while(i < line_num ){
         getline(index_file, temp);
-        i++;
         if(index_file.eof()){
             printf("NUM OUT OF INDEX");
             return -1;
         }
+        i++;
     }
 
-    int key, value, temp_key=0;
+    int key, value=0;
     map<char, int> last_index;
 
 //get nearest index bucket
-    while(line_num != 0){ //if num < BYTES_OF_BLOCK just skip
+    int temp_key = 0;
+    while(line_num != 0){
         index_file>>key>>value;
-
-        if(temp_key > key){ //previous block do not have this character
+//        cout<<(char)key<<" index value is "<<value<<endl;
+        if(temp_key >= key){
+//            cout<<"No this word in previous block\n";
             value = 0;
             break;
         }
         temp_key = key;
-        if(key == (int)ch)
+        if(key == ch){
+            //           cout<<"find "<<(char)key<<endl;
             break;
+        }
     }
 
     int extra_num = num % BYTES_OF_BLOCK;
+    bwt_file.clear();
     bwt_file.seekg(line_num*BYTES_OF_BLOCK,ios::beg);
     char bwt_ch;
     for(int i=0; i<extra_num; ++i){
@@ -285,11 +309,12 @@ int occ(char ch, int num, fstream& bwt_file, fstream& index_file){
         if(bwt_ch == ch)
             value++;
     }
+    cout<<" value:"<<value<<endl;
     return value;
 }
 
 int find_i_char(int i, char ch, fstream& bwtfile, fstream& index_file){
-    printf("---------find i char : i is %d, ch is %c\n", i, ch);
+ //   printf("---------find i char : i is %d, ch is %c\n", i, ch);
 
     int result = 0;
     index_file.clear();
@@ -306,11 +331,11 @@ int find_i_char(int i, char ch, fstream& bwtfile, fstream& index_file){
         line_num++;
         while(!stream.eof()){
             stream>>key>>value;
-            printf("key is %c, value is %d\n", (char)key, value);
+  //          printf("key is %c, value is %d\n", (char)key, value);
             if(key == ch) {
                 if (value < i && value>result) {
                     result = value;
-                    printf("result: %d\n", result);
+ //                   printf("result: %d\n", result);
                 }else{
                     break;
                 }
@@ -322,18 +347,18 @@ int find_i_char(int i, char ch, fstream& bwtfile, fstream& index_file){
     }
     line_num--;
     int ret = line_num*BYTES_OF_BLOCK;
-    printf("ret is %d, result is %d\n", ret, result);
+ //   printf("ret is %d, result is %d\n", ret, result);
 
     bwtfile.clear();
     bwtfile.seekg(ret);
     char chr;
     while(result != i && !bwtfile.eof()){
         if(result > i){
-            printf("find %d char ERR: OUT OF INDEX %d\n", result, i);
+ //           printf("find %d char ERR: OUT OF INDEX %d\n", result, i);
             return -1;
         }
         bwtfile>>noskipws>>chr;
-        cout<<chr<<endl;
+ //       cout<<chr<<endl;
         if(chr == ch){
             result++;
         }
