@@ -6,26 +6,25 @@
 
 using namespace std;
 
-
-void add_one(map<string, map> index, string word, string file);
-void update_index(map<string, map> index, string files);
+void add_one(map<string, map<string, int>> index, string word, string file);
+void update_index(map<string, map<string, int>> index, string files);
 int create_index(string file_list[], int num);
 
 int main(int argc, char* argv[]) {
-    bool concept = true;
-    if(argv[2] != "-c"){
-        concept = false;
-    }
+    map<string, map<string, int>> index;
+	string file[3] = {"../asset/simple/file1.txt", "../asset/simple/file2.txt", "../asset/simple/file3.txt"};
+	int num = 3;
+	create_index(file, 3);
+	for(auto it = index.begin(); it != index.end(); ++it)
+	{
+		cout << it->first << " " << it->second.first << " " << it->second.second << "\n";
+	}
 
-    pattern = get_pattern(argv[]);
-    create_index();
-    search(pattern);
-    return 0;
 }
 
 int create_index(string file_list[], int num){
 
-    map<string, map> index;
+    map<string, map<string, int>> index;
     for(int i=0; i < num; ++i){
         string file = file_list[i];
         update_index(index, file);
@@ -51,7 +50,7 @@ void add_one(map<string, map<string, int>> index, string word, string file){
     if (it == index.end()){
         map<string, int> occur;
         occur.insert(pair<string, int>(file, 1));
-        index.insert(pair<string, map>(word, occur));
+        index.insert(pair<string, map<string, int>>(word, occur));
     }else{
         it_2 = it->second.find(file);
         if(it_2 == it->second.end()){
