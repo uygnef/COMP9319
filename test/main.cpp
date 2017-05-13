@@ -94,12 +94,12 @@ int build_index(string input_file, string output_file){
 
 map<char, int> get_C_from_index_file(string index_file) //copy from http://stackoverflow.com/questions/11876290/c-fastest-way-to-read-only-last-line-of-text-file
 {
-    printf("get c from index file\n");
+
     ifstream fin;
     fin.open(index_file);
     map<char, int> C;
 
-
+    
     fin.seekg(-1,ios_base::end);                // go to one spot before the EOF
 
     bool keepLooping = true;
@@ -125,15 +125,14 @@ map<char, int> get_C_from_index_file(string index_file) //copy from http://stack
         fin>>key>>value;
         C.insert(make_pair(static_cast<char>(key), value));
     }
-
+    
     fin.close();
     return C;
 }
 
 int search(vector<string> pattern_list, string bwt_file, string index_file){
-    printf("search \n");
     map<string, string> all_data;
-    for (unsigned int i = 0; pattern_list.size() > i; i++) {
+    for (int i = 0; i < pattern_list.size(); i++) {
         string pattern = pattern_list[i];
         if(i==0)
             all_data = get_result(pattern, bwt_file, index_file);
@@ -147,7 +146,6 @@ int search(vector<string> pattern_list, string bwt_file, string index_file){
 }
 
 void find_pattern_in_list(string pattern, map<string, string>& all_data){
-    printf("find pattern in list: patter\n");
     map<string,string>::iterator it;
     for(it = all_data.begin(); it != all_data.end();) {
         if(it->second.find(pattern) == string::npos){
@@ -160,7 +158,6 @@ void find_pattern_in_list(string pattern, map<string, string>& all_data){
 
 
 map<string,string> get_result(string pattern, string input_file, string _index_file) {
-
 
     int curt_pos = pattern.size() - 1;
     char c = pattern[curt_pos];
@@ -198,21 +195,14 @@ map<string,string> get_result(string pattern, string input_file, string _index_f
 
     while (curt_pos >= 1 && first <= last) {
         c = pattern[curt_pos-1]; //go to pre char in pattern
-        int first_occ = occ(c, first-1, bwt_file, index_file);
-        printf("fist occ is:%d. ", first_occ);
         first = count_map[c] + occ(c, first-1, bwt_file, index_file);
-        int last_occ = occ(c, last, bwt_file, index_file);
-        printf("last occ is:%d. ", last_occ);
         last = count_map[c] + occ(c, last, bwt_file, index_file) - 1;
-
         curt_pos--;
-        printf("first is %d, last is %d", first, last);
         if(last<first)
             return all_match;
     }
 
     for(int i = first; i <= last; ++i){
-        printf("i is %d\n",i);
         string index;
         string full_word = backward_search(i, bwt_file, index_file, index);
         string next_str = forward_search(i, bwt_file, index_file);
@@ -222,22 +212,27 @@ map<string,string> get_result(string pattern, string input_file, string _index_f
         full_word += next_str;
         all_match[index] = full_word;
     }
-    //   result[i] = full_word;
+     //   result[i] = full_word;
     return all_match;
 }
-//   bwt_file.close();
+ //   bwt_file.close();
 
 
 string backward_search(int i, fstream& bwt_file, fstream& index_file, string& index){
-    printf("back search i %d,\n", i);
     string full_word;
 //backward search find first part
     char pre_ch = get_char(i, bwt_file);
     int pre_ch_num = i;
+    bool is_index = false;
     while (pre_ch != '[') {
-
+        if(pre_ch == ']'){
+            is_index = true;
+        }
+        if(is_index){
+            if(pre_ch != ']') index = pre_ch + index;
+        }else{
             full_word = pre_ch + full_word;
-
+        }
         pre_ch_num = count_map[pre_ch] + occ(pre_ch, pre_ch_num , bwt_file, index_file) - 1;
         pre_ch = get_char(pre_ch_num, bwt_file);
     }
@@ -246,7 +241,6 @@ string backward_search(int i, fstream& bwt_file, fstream& index_file, string& in
 
 
 string forward_search(int i, fstream& bwt_file, fstream& index_file){
-    printf("forward search:i  %d\n", i);
     char  ch = the_i_th_char(i);
     string full_word = "";
     while(ch != '['){
@@ -260,7 +254,6 @@ string forward_search(int i, fstream& bwt_file, fstream& index_file){
 }
 
 char get_char(int i, fstream& bwtfile){
-    printf("get char %d\n", i);
     bwtfile.clear();
     bwtfile.seekg(i-1, ios::beg);
     char val;
@@ -269,23 +262,22 @@ char get_char(int i, fstream& bwtfile){
 }
 
 int occ(char ch, int num, fstream& bwt_file, fstream& index_file){
-    printf("occ ch %c, num %d\n", ch, num);
+
     int line_num = num / BYTES_OF_BLOCK;
     int i = 1;
-    //loop to the target line
+   //loop to the target line
     string temp;
     index_file.clear();
     index_file.seekg(0);
     while(i < line_num ){
         getline(index_file, temp);
         if(index_file.eof()){
-            index_file.clear();
             printf("NUM OUT OF INDEX");
             return -1;
         }
         i++;
     }
-    printf("----OCC: i is %d\t", i);
+
     int key, value=0;
     map<char, int> last_index;
 
@@ -302,28 +294,23 @@ int occ(char ch, int num, fstream& bwt_file, fstream& index_file){
             break;
         }
     }
-    printf("value is %d\t", value);
+
     int extra_num = num % BYTES_OF_BLOCK;
     bwt_file.clear();
     bwt_file.seekg(line_num*BYTES_OF_BLOCK,ios::beg);
-    printf("bwt file seekg is %d, extra_num is %d\n", line_num*BYTES_OF_BLOCK, extra_num);
     char bwt_ch;
     for(int i=0; i<extra_num; ++i){
-        printf("extra is %d, i is %d\n", extra_num, i);
-        bwt_file>>noskipws>>bwt_ch;
-        if(bwt_ch == EOF) {//TODO: in case out of index
+        if(bwt_ch == EOF)//TODO: in case out of index
             break;
-        }
-        printf("\nbwt_ch is %c \t", bwt_ch);
+        bwt_file>>noskipws>>bwt_ch;
         if(bwt_ch == ch)
             value++;
     }
-    printf("final value is %d\t", value);
     return value;
 }
 
 int find_i_char(int i, char ch, fstream& bwtfile, fstream& index_file){
-    printf("find i char: i %d, char %c\n", i, ch);
+
     int result = 0;
     index_file.clear();
     index_file.seekg(0);
@@ -371,7 +358,6 @@ int find_i_char(int i, char ch, fstream& bwtfile, fstream& index_file){
 }
 
 char the_i_th_char(int& i){
-    printf("the ith chat %d\n", i);
     char ch, temp_ch;
     int temp_value;
     for( map<char,int>::iterator it = count_map.begin(); it != count_map.end(); ++it){

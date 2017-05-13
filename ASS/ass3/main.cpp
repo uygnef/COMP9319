@@ -3,50 +3,61 @@
 #include <string>
 #include <map>
 #include <fstream>
-#include <winnt.h>
 #include <vector>
 #include <dirent.h>
-#include <sys/stat.h>
-#include <windows.h>
+#include "smassung-porter2_stemmer/porter2_stemmer.h"
+#include "smassung-porter2_stemmer/porter2_stemmer.cpp"
 
 using namespace std;
 
 #define CREATE_INDEX_DEBUG
-#define WINDOWS
 
 void add_one(map<string, map<string, int>>& index, string word, string file);
 void update_index(map<string, map<string, int>>& index, string files);
-int create_index( map<string, map<string, int>>& index, string file_list[], int num);
+int create_index( map<string, map<string, int>>& index, vector<string> file_list);
+void get_all_files(vector<string> &files, string path);
+void clean_path(string &path);
+
 
 int main(int argc, char* argv[]) {
+#ifndef CREATE_INDEX_DEBUG
     bool concept = true;
     if(argv[2] != "-c"){
         concept = false;
     }
+    string path = argv[1];
+
+#endif
+    cout<<"start"<<endl;
+    vector<string> files;
+    map<string, map<string, int>> index;
+
 
 #ifdef CREATE_INDEX_DEBUG
-    map<string, map<string, int>> debug_index;
-    string debug_file[3] = {"file1.txt", "file2.txt", "file3.txt"};
-    int num = 3;
-    create_index(debug_index, debug_file, 3);
+    files.push_back("../asset/simple/file1.txt");
+    files.push_back("../asset/simple/file2.txt");
+    files.push_back("../asset/simple/file3.txt");
 
-    for(auto it = debug_index.begin(); it != debug_index.end(); ++it)
+    create_index(index, files);
+
+    for(auto it = index.begin(); it != index.end(); ++it)
     {
         for(auto it2 = it->second.begin(); it2 != it->second.end(); ++it2){
             cout << it->first << " " << it2->first << " " << it2->second << "\n";
         }
     }
-#endif
-
+#else
+    get_all_files(files, path);
+    create_index(index, files);
     pattern = get_pattern(argv[]);
-    create_index();
     search(pattern);
+#endif
     return 0;
 }
 
-int create_index(map<string, map<string, int>>& index, string file_list[], int num){
+int create_index(map<string, map<string, int>>& index, vector<string> file_list){
 
-    for(int i=0; i < num; ++i){
+    for(int i=0; i < file_list.size(); ++i){
         cout<<file_list[i]<<endl;
         string file = file_list[i];
         update_index(index, file);
@@ -65,7 +76,10 @@ void update_index(map<string, map<string, int>>& index, string files){
     }
 
     while(file>>boolalpha>>word){
-
+        cout<<word<<" ";
+        Porter2Stemmer::trim(word);
+        Porter2Stemmer::stem(word);
+        cout<<word<<endl;
         add_one(index, word, files);
     }
 }
@@ -74,7 +88,7 @@ void add_one(map<string, map<string, int>>& index, string word, string file){
     map<string, map<string, int>>::iterator it;
     map<string, int>::iterator it_2;
 
-
+    clean_path(file);
     it = index.find(word);
     if (it == index.end()){
 
@@ -92,55 +106,25 @@ void add_one(map<string, map<string, int>>& index, string word, string file){
     }
 }
 
+/*only keep the file name from path*/
+
+void clean_path(string &path){
+    size_t pos = path.find_last_of ('/');
+    if (pos != string::npos)
+        path = path.substr(pos+1);
+}
+
 /* Returns a list of files in a directory (except the ones that begin with a dot) */
 
-void GetFilesInDirectory(std::vector<string> &out, const string &directory)
-{
-#ifdef WINDOWS
-    HANDLE dir;
-    WIN32_FIND_DATA file_data;
+void get_all_files(vector<string> &files, string path) {
 
-    if ((dir = FindFirstFile((directory + "/*").c_str(), &file_data)) == INVALID_HANDLE_VALUE)
-        return; /* No files found */
+    DIR*    dir;
+    dirent* pdir;
 
-    do {
-        const string file_name = file_data.cFileName;
-        const string full_file_name = directory + "/" + file_name;
-        const bool is_directory = (file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    dir = opendir(path.c_str());
 
-        if (file_name[0] == '.')
-            continue;
-
-        if (is_directory)
-            continue;
-
-        out.push_back(full_file_name);
-    } while (FindNextFile(dir, &file_data));
-
-    FindClose(dir);
-#else
-    DIR *dir;
-    class dirent *ent;
-    class stat st;
-
-    dir = opendir(directory);
-    while ((ent = readdir(dir)) != NULL) {
-        const string file_name = ent->d_name;
-        const string full_file_name = directory + "/" + file_name;
-
-        if (file_name[0] == '.')
-            continue;
-
-        if (stat(full_file_name.c_str(), &st) == -1)
-            continue;
-
-        const bool is_directory = (st.st_mode & S_IFDIR) != 0;
-
-        if (is_directory)
-            continue;
-
-        out.push_back(full_file_name);
+    while (pdir = readdir(dir)) {
+        cout<<pdir->d_name;
+        files.push_back(pdir->d_name);
     }
-    closedir(dir);
-#endif
-} // GetFilesInDirectory
+}
