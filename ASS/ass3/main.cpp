@@ -10,8 +10,8 @@
 
 using namespace std;
 
-#define CREATE_INDEX_DEBUG
-
+//#define CREATE_INDEX_DEBUG
+#define INPUT_DEBUG
 void add_one(map<string, map<string, int>>& index, string word, string file);
 void update_index(map<string, map<string, int>>& index, string files);
 int create_index( map<string, map<string, int>>& index, vector<string> file_list);
@@ -19,8 +19,23 @@ void get_all_files(vector<string> &files, string path);
 void clean_path(string &path);
 
 
+
+
+struct field_reader: std::ctype<char> {
+    field_reader(std::string const &s): std::ctype<char>(get_table(s)) {}
+    static std::ctype_base::mask const* get_table(std::string const &s) {
+        static std::vector<std::ctype_base::mask>
+                rc(table_size, std::ctype_base::mask());
+        for (auto ch : s)
+            rc[ch] = std::ctype_base::space;
+        return &rc[0];
+    }
+};
+
+
+
 int main(int argc, char* argv[]) {
-#ifndef CREATE_INDEX_DEBUG
+#ifndef INPUT_DEBUG
     bool concept = true;
     if(argv[2] != "-c"){
         concept = false;
@@ -47,10 +62,11 @@ int main(int argc, char* argv[]) {
         }
     }
 #else
+    string path = "../asset/simple";
     get_all_files(files, path);
     create_index(index, files);
-    pattern = get_pattern(argv[]);
-    search(pattern);
+//    pattern = get_pattern(argv[]);
+//    search(pattern);
 #endif
     return 0;
 }
@@ -75,7 +91,16 @@ void update_index(map<string, map<string, int>>& index, string files){
         return;
     }
 
-    while(file>>boolalpha>>word){
+    string divider = "";
+    for(char i=0; i<126; ++i){
+        if((i<='Z' and i>='A') or (i>='a' and i<='z'))
+            continue;
+        divider += i;
+    }
+
+    file.imbue(std::locale(std::locale(), new field_reader(divider)));
+
+    while(file>>word){
         cout<<word<<" ";
         Porter2Stemmer::trim(word);
         Porter2Stemmer::stem(word);
@@ -124,7 +149,11 @@ void get_all_files(vector<string> &files, string path) {
     dir = opendir(path.c_str());
 
     while (pdir = readdir(dir)) {
-        cout<<pdir->d_name;
-        files.push_back(pdir->d_name);
+//        cout<<pdir->d_name<<endl;
+        if(pdir->d_name[0] == '.') continue;
+#ifndef INPUT_DEBUG
+        cout<<"THIS IS "<<pdir->d_name<<endl;
+#endif
+        files.push_back(path + '/' + pdir->d_name);
     }
 }
