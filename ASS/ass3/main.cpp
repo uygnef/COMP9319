@@ -10,18 +10,28 @@
 
 using namespace std;
 
-//#define CREATE_INDEX_DEBUG
+#define CREATE_INDEX_DEBUG
 #define INPUT_DEBUG
 
 #define ALL_READ_BLOCK_SIZE 15000000
 void add_one(map<string, map<int, int>>& index, string word, int file_no);
 void update_index(map<string, map<int, int>>& index, string files, int file_no);
 int create_index( map<string, map<int, int>>& index, vector<string> file_list);
-void get_all_files(vector<string> &files, string path);
+void get_all_files(vector<string> files, string path);
 void write_index_to_file(string file_name, map<string, map<int, int>>& index);
+int load_block(vector<string> store_list, fstream& file, const int block_size);
+string load(vector<string>::iterator& index_pos, vector<string>& index_line, fstream& index_file, int block_size);
+void compare_and_write(string queue[], vector<short>& remain, fstream& index_name);
+string get_key(string line);
+string get_value(string line);
+void merge_string(string& a, string& b);
+void write_down(string& line, fstream& index_file);
+void merge_all_block(vector<string> index_line[], string index_name, fstream index_file[], const int each_block_size);
+void merge_index(string index_name);
 
 int memory_counter = 0;
-int index_no = 0;
+short index_no = 0;//TODO might be wrong.
+
 
 struct field_reader: std::ctype<char> {
     field_reader(std::string const &s): std::ctype<char>(get_table(s)) {}
@@ -87,7 +97,8 @@ int create_index(map<string, map<int, int>>& index, vector<string> file_list){
         index_no++;
     }
 
-    merge_index(index_no);
+    string merge_index_name = "my.index";
+    merge_index(merge_index_name);
 
 }
 
@@ -156,7 +167,7 @@ void add_one(map<string, map<int, int>>& index, string word, int file_no){
 
 /* Returns a list of files in a directory (except the ones that begin with a dot) */
 
-void get_all_files(vector<string> &files, string path) {
+void get_all_files(vector<string> files, string path) {
 
     DIR*    dir;
     dirent* pdir;
@@ -215,12 +226,154 @@ void merge_index(string index_name){
     const int each_block_size = ALL_READ_BLOCK_SIZE/index_no;
 
     fstream index_file[index_no];           //store open file pointer
-    array<string, each_block_size> index_line[index_no];    //store the line in each index file;
+    vector<string> index_line[index_no];    //store the line in each index file;
 
     for(int i=0; i<index_no; ++i){
         string temp_index = to_string(i);
         index_file[i].open(temp_index.c_str(), fstream::in);
+        load_block(index_line[i], index_file[i], each_block_size);
+    }
+
+    merge_all_block(index_line, index_name, index_file, each_block_size);
+}
+
+/*
+ * maintain a list which get index from a sub_index file,
+ * when the current index is used, move to next index entity.
+ * after all index has used, clear the list and load next block
+ * data from sub_index file.
+ */
+int load_block(vector<string> store_list, fstream& file, const int block_size){
+    if(!store_list.empty()){
+        printf("SUB INDEX LIST NOT EMPTY.\n");
+        return -1;
+    }
+    /*file is closed, means has merge this file.
+     *
+     */
+    if(!file.is_open()){
+        return 0;
+    }
+    int size = 0;
+    string temp;
+    while(getline(file, temp)){
+        store_list.push_back(temp);
+
+        size += (temp.size() + 2);
+        if(size > block_size){
+            return 1;
+        }
+    }
+    file.close();
+    return 0;
+}
+
+/*
+ * use the string in memory, merge into a list, after the index list is full,
+ * put it into the disk.
+ */
+void merge_all_block(vector<string> index_line[], string index_name, fstream index_file[], const int each_block_size){
+    vector<string>::iterator index_pos[index_no];
+    string queue[index_no];
+    for(short i=0; i<index_no; ++i){ // load data to queue. initialized
+            queue[i] = load(index_pos[i], index_line[i], index_file[i], each_block_size);
+    }
+    vector<short> remain_file;//if remain file is empty, merge is done.
+    for(short i=0; i < index_no; i++){
+        remain_file.push_back(i);
+    }
+
+    fstream file;
+    file.open(index_name, ios::out|ios::in);
+    while(!remain_file.empty()){
+        compare_and_write(queue, remain_file, file);
+        for(auto i:remain_file){
+             if(queue[i].empty())
+                 queue[i] = load(index_pos[i], index_line[i], index_file[i], each_block_size);
+        }
+    }
+}
+
+
+string load(vector<string>::iterator& index_pos, vector<string>& index_line, fstream& index_file, int block_size){
+    if (index_pos == index_line.end()){
+        index_line.clear();
+        if(load_block(index_line, index_file, block_size)){
+            index_pos = index_line.begin();
+            string data = *index_pos;
+            index_pos++;
+            return data;
+        }
+        return "EOF";
+    }
+
+    string data = *index_pos;
+    index_pos++;
+    return data;
+}
+
+/*
+ * compare the all element in queue, put the smallest into disk.
+ * remove this element.
+ */
+void compare_and_write(string queue[], vector<short>& remain, fstream& index_name){
+    string min_str;
+    string temp;
+    vector<short>::iterator temp_i;
+    for(vector<short>::iterator i = remain.begin(); i != remain.end(); ++i){
+        if(queue[*i].compare("EOF")){
+            remain.erase(i);
+            continue;
+        }
+        if(min_str.empty()){
+            min_str = get_key(queue[*i]);
+            temp_i = i;
+            continue;
+        }
+        temp = get_key(queue[*i]);
+        if(temp.compare(min_str) < 0){
+            min_str = temp;
+            temp_i = i;
+        }
+
+        if(temp.compare(min_str) == 0)               //if two is equal merge them to a new set.
+            merge_string(queue[*temp_i], queue[*i]);
 
     }
 
+    write_down(queue[*temp_i], index_name);
+}
+
+
+void merge_string(string& a, string& b){
+    a = get_key(a) + get_value(a) + get_value(b) + "\n";
+    b.clear();
+}
+
+string get_key(string line){
+    string a="";
+    for(auto i: line){
+        if(i == ' ') break;
+        a += i;
+    }
+    return a;
+}
+
+string get_value(string line){
+    string a="";
+    bool value = false;
+    for(auto i: line){
+        if(i != ' ' and !value) {
+            value = true;
+            continue;
+        }
+        if(i == '\n')
+            break;
+        a += i;
+    }
+}
+
+void write_down(string& line, fstream& index_file){
+    index_file<<line;
+    line.clear();
 }
