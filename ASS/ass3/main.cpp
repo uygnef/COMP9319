@@ -17,7 +17,7 @@ using namespace std;
 void add_one(map<string, map<int, int>>& index, string word, int file_no);
 void update_index(map<string, map<int, int>>& index, string files, int file_no);
 int create_index( map<string, map<int, int>>& index, vector<string> file_list);
-void get_all_files(vector<string> files, string path);
+vector<string> get_all_files(string path);
 void write_index_to_file(string file_name, map<string, map<int, int>>& index);
 int load_block(vector<string> store_list, fstream& file, const int block_size);
 string load(vector<string>::iterator& index_pos, vector<string>& index_line, fstream& index_file, int block_size);
@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
     map<string, map<int, int>> index;
 
 
-#ifdef CREATE_INDEX_DEBUG
+#ifndef CREATE_INDEX_DEBUG
     files.push_back("../asset/simple/file1.txt");
     files.push_back("../asset/simple/file2.txt");
     files.push_back("../asset/simple/file3.txt");
@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
     }
 #else
     string path = "../asset/books200m";
-    get_all_files(files, path);
+    files = get_all_files(path);
     create_index(index, files);
 //    pattern = get_pattern(argv[]);
 //    search(pattern);
@@ -92,11 +92,14 @@ int create_index(map<string, map<int, int>>& index, vector<string> file_list){
         update_index(index, file_list[i], i);
 
     }
-    if(not index.empty()){
+    printf("Write LAST sub INDEX.\n");
+    if(not index.empty()){ //deal with the last index in memory.
         write_index_to_file(to_string(index_no), index);
         index_no++;
     }
 
+
+    printf("start merge index.\n");
     string merge_index_name = "my.index";
     merge_index(merge_index_name);
 
@@ -122,12 +125,12 @@ void update_index(map<string, map<int, int>>& index, string files, int file_no){
     file.imbue(std::locale(std::locale(), new field_reader(divider)));
 
     while(file>>word){
-#ifdef CREATE_INDEX_DEBUG
+#ifndef CREATE_INDEX_DEBUG
         cout<<word<<" ";
 #endif
         Porter2Stemmer::trim(word);
         Porter2Stemmer::stem(word);
-#ifdef CREATE_INDEX_DEBUG
+#ifndef CREATE_INDEX_DEBUG
         cout<<word<<endl;
 #endif
         add_one(index, word, file_no);
@@ -137,6 +140,7 @@ void update_index(map<string, map<int, int>>& index, string files, int file_no){
         if (memory_counter>15000000){ //make sure will not run out of memory
             write_index_to_file(to_string(index_no), index);
             index_no++;
+            return;
         }
     }
 
@@ -167,10 +171,11 @@ void add_one(map<string, map<int, int>>& index, string word, int file_no){
 
 /* Returns a list of files in a directory (except the ones that begin with a dot) */
 
-void get_all_files(vector<string> files, string path) {
+vector<string> get_all_files(string path) {
 
     DIR*    dir;
     dirent* pdir;
+    vector<string> files;
 
     dir = opendir(path.c_str());
 
@@ -182,6 +187,7 @@ void get_all_files(vector<string> files, string path) {
 #endif
         files.push_back(path + '/' + pdir->d_name);
     }
+    return files;
 }
 
 
@@ -192,18 +198,22 @@ void get_all_files(vector<string> files, string path) {
 void write_index_to_file(string file_name, map<string, map<int, int>>& index){
     ofstream file;
     file.open(file_name);
+    if(file.fail()){
+        printf("OPEN INDEX FILE ERROR.\n");
+        return;
+    }
     for(auto it = index.begin(); it != index.end(); ++it)
     {
         file << it->first ;
         for(auto it2 = it->second.begin(); it2 != it->second.end(); ++it2){
             file << " " << it2->first << " " << it2->second;
+
         }
         file<<endl;
     }
 
     index.clear();
     memory_counter = 0;
-
 }
 
 /*
@@ -223,6 +233,10 @@ void write_index_to_file(string file_name, map<string, map<int, int>>& index){
  */
 
 void merge_index(string index_name){
+    if (index_no == 1){ //if only have one index, just rename it and return.
+        rename("0", index_name.c_str());
+        return;
+    }
     const int each_block_size = ALL_READ_BLOCK_SIZE/index_no;
 
     fstream index_file[index_no];           //store open file pointer
