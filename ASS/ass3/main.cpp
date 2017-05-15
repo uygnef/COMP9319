@@ -19,8 +19,8 @@ void update_index(map<string, map<int, int>>& index, string files, int file_no);
 int create_index( map<string, map<int, int>>& index, vector<string> file_list);
 vector<string> get_all_files(string path);
 void write_index_to_file(string file_name, map<string, map<int, int>>& index);
-int load_block(vector<string> store_list, fstream& file, const int block_size);
-string load(vector<string>::iterator& index_pos, vector<string>& index_line, fstream& index_file, int block_size);
+int load_block(vector<string>& store_list, fstream& file, const int block_size);
+string load(short& index_pos, vector<string>& index_line, fstream& index_file, int block_size);
 void compare_and_write(string queue[], vector<short>& remain, fstream& index_name);
 string get_key(string line);
 string get_value(string line);
@@ -76,7 +76,12 @@ int main(int argc, char* argv[]) {
 #else
     string path = "../asset/books200m";
     files = get_all_files(path);
-    create_index(index, files);
+//create_index(index, files);
+
+    index_no = 13;
+    printf("start merge index.\n");
+    string merge_index_name = "my.index";
+    merge_index(merge_index_name);
 //    pattern = get_pattern(argv[]);
 //    search(pattern);
 #endif
@@ -202,13 +207,12 @@ void write_index_to_file(string file_name, map<string, map<int, int>>& index){
         printf("OPEN INDEX FILE ERROR.\n");
         return;
     }
+    printf("WRITE A index %s.\n", file_name);
     for(auto it = index.begin(); it != index.end(); ++it)
     {
         file << it->first ;
-        for(auto it2 = it->second.begin(); it2 != it->second.end(); ++it2){
+        for(auto it2 = it->second.begin(); it2 != it->second.end(); ++it2)
             file << " " << it2->first << " " << it2->second;
-
-        }
         file<<endl;
     }
 
@@ -243,6 +247,7 @@ void merge_index(string index_name){
     vector<string> index_line[index_no];    //store the line in each index file;
 
     for(int i=0; i<index_no; ++i){
+        printf("index %d: initialized.\n");
         string temp_index = to_string(i);
         index_file[i].open(temp_index.c_str(), fstream::in);
         load_block(index_line[i], index_file[i], each_block_size);
@@ -257,7 +262,7 @@ void merge_index(string index_name){
  * after all index has used, clear the list and load next block
  * data from sub_index file.
  */
-int load_block(vector<string> store_list, fstream& file, const int block_size){
+int load_block(vector<string>& store_list, fstream& file, const int block_size){
     if(!store_list.empty()){
         printf("SUB INDEX LIST NOT EMPTY.\n");
         return -1;
@@ -265,7 +270,10 @@ int load_block(vector<string> store_list, fstream& file, const int block_size){
     /*file is closed, means has merge this file.
      *
      */
+    printf("load block.\n");
+
     if(!file.is_open()){
+        printf("--------has closed!\n");
         return 0;
     }
     int size = 0;
@@ -279,6 +287,7 @@ int load_block(vector<string> store_list, fstream& file, const int block_size){
         }
     }
     file.close();
+    printf("load finished.\n");
     return 0;
 }
 
@@ -287,8 +296,11 @@ int load_block(vector<string> store_list, fstream& file, const int block_size){
  * put it into the disk.
  */
 void merge_all_block(vector<string> index_line[], string index_name, fstream index_file[], const int each_block_size){
-    vector<string>::iterator index_pos[index_no];
+    printf("merge all block.\n");
+
+    short index_pos[index_no] = {0};
     string queue[index_no];
+
     for(short i=0; i<index_no; ++i){ // load data to queue. initialized
             queue[i] = load(index_pos[i], index_line[i], index_file[i], each_block_size);
     }
@@ -298,7 +310,11 @@ void merge_all_block(vector<string> index_line[], string index_name, fstream ind
     }
 
     fstream file;
-    file.open(index_name, ios::out|ios::in);
+    file.open(index_name, ios::in | ios::out | ios::app);
+    if(file.fail()){
+        printf("OPEN INDEX FILE ERROR.");
+        return;
+    }
     while(!remain_file.empty()){
         compare_and_write(queue, remain_file, file);
         for(auto i:remain_file){
@@ -309,19 +325,20 @@ void merge_all_block(vector<string> index_line[], string index_name, fstream ind
 }
 
 
-string load(vector<string>::iterator& index_pos, vector<string>& index_line, fstream& index_file, int block_size){
-    if (index_pos == index_line.end()){
+string load(short& index_pos, vector<string>& index_line, fstream& index_file, int block_size){
+    if (index_pos == index_line.size()){
         index_line.clear();
+        index_pos = 0;
         if(load_block(index_line, index_file, block_size)){
-            index_pos = index_line.begin();
-            string data = *index_pos;
+            index_pos = 0;
+            string data = index_line[0];
             index_pos++;
             return data;
         }
         return "EOF";
     }
 
-    string data = *index_pos;
+    string data = index_line[index_pos];
     index_pos++;
     return data;
 }
