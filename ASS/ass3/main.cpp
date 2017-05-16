@@ -20,7 +20,7 @@ int create_index( map<string, map<int, int>>& index, vector<string> file_list);
 vector<string> get_all_files(string path);
 void write_index_to_file(string file_name, map<string, map<int, int>>& index);
 int load_block(vector<string>& store_list, fstream& file, const int block_size);
-string load(short& index_pos, vector<string>& index_line, fstream& index_file, int block_size);
+string load(int& index_pos, vector<string>& index_line, fstream& index_file, int block_size);
 void compare_and_write(string queue[], vector<short>& remain, fstream& index_name);
 string get_key(string line);
 string get_value(string line);
@@ -76,8 +76,9 @@ int main(int argc, char* argv[]) {
 #else
     string path = "../asset/books200m";
     files = get_all_files(path);
-//create_index(index, files);
-
+#ifndef MERGE_TEXT
+    create_index(index, files);
+#else
     index_no = 13;
     printf("start merge index.\n");
     string merge_index_name = "my.index";
@@ -85,13 +86,14 @@ int main(int argc, char* argv[]) {
 //    pattern = get_pattern(argv[]);
 //    search(pattern);
 #endif
+#endif
     return 0;
 }
 
 int create_index(map<string, map<int, int>>& index, vector<string> file_list){
 
     for(int i=0; i < file_list.size(); ++i){
-#ifdef CREATE_INDEX_DEBUG
+#ifndef CREATE_INDEX_DEBUG
         cout<<file_list[i]<<endl;
 #endif
         update_index(index, file_list[i], i);
@@ -121,12 +123,12 @@ void update_index(map<string, map<int, int>>& index, string files, int file_no){
     }
 
     string divider = "";
-    for(char i=0; i<126; ++i){
+    for(char i=0; i<=126; ++i){
         if((i<='Z' and i>='A') or (i>='a' and i<='z'))
             continue;
         divider += i;
     }
-
+    divider += '~';
     file.imbue(std::locale(std::locale(), new field_reader(divider)));
 
     while(file>>word){
@@ -207,7 +209,7 @@ void write_index_to_file(string file_name, map<string, map<int, int>>& index){
         printf("OPEN INDEX FILE ERROR.\n");
         return;
     }
-    printf("WRITE A index %s.\n", file_name);
+    printf("WRITE A index.\n");
     for(auto it = index.begin(); it != index.end(); ++it)
     {
         file << it->first ;
@@ -274,7 +276,7 @@ int load_block(vector<string>& store_list, fstream& file, const int block_size){
 
     if(!file.is_open()){
         printf("--------has closed!\n");
-        return 0;
+        return 1;
     }
     int size = 0;
     string temp;
@@ -298,19 +300,19 @@ int load_block(vector<string>& store_list, fstream& file, const int block_size){
 void merge_all_block(vector<string> index_line[], string index_name, fstream index_file[], const int each_block_size){
     printf("merge all block.\n");
 
-    short index_pos[index_no] = {0};
+    int index_pos[index_no] = {0};
     string queue[index_no];
 
     for(short i=0; i<index_no; ++i){ // load data to queue. initialized
             queue[i] = load(index_pos[i], index_line[i], index_file[i], each_block_size);
     }
     vector<short> remain_file;//if remain file is empty, merge is done.
-    for(short i=0; i < index_no; i++){
+    for(short i=0; i < index_no; ++i){
         remain_file.push_back(i);
     }
 
     fstream file;
-    file.open(index_name, ios::in | ios::out | ios::app);
+    file.open(index_name, ios::in | ios::out);
     if(file.fail()){
         printf("OPEN INDEX FILE ERROR.");
         return;
@@ -325,11 +327,11 @@ void merge_all_block(vector<string> index_line[], string index_name, fstream ind
 }
 
 
-string load(short& index_pos, vector<string>& index_line, fstream& index_file, int block_size){
+string load(int& index_pos, vector<string>& index_line, fstream& index_file, int block_size){
     if (index_pos == index_line.size()){
         index_line.clear();
         index_pos = 0;
-        if(load_block(index_line, index_file, block_size)){
+        if(load_block(index_line, index_file, block_size) != 1){
             index_pos = 0;
             string data = index_line[0];
             index_pos++;
@@ -338,7 +340,7 @@ string load(short& index_pos, vector<string>& index_line, fstream& index_file, i
         return "EOF";
     }
 
-    string data = index_line[index_pos];
+        string data = index_line[index_pos];
     index_pos++;
     return data;
 }
@@ -350,39 +352,41 @@ string load(short& index_pos, vector<string>& index_line, fstream& index_file, i
 void compare_and_write(string queue[], vector<short>& remain, fstream& index_name){
     string min_str;
     string temp;
-    vector<short>::iterator temp_i;
+    vector<short>::iterator min_i;
     for(vector<short>::iterator i = remain.begin(); i != remain.end(); ++i){
-        if(queue[*i].compare("EOF")){
+//        cout<<"QUEUE IS: "<<queue[*i]<<endl;
+        if(queue[*i].compare("EOF") == 0){
+            cout<<"HAS CLOSED "<<*i<<endl;
             remain.erase(i);
-            continue;
+            return;
         }
         if(min_str.empty()){
             min_str = get_key(queue[*i]);
-            temp_i = i;
+            min_i = i;
             continue;
         }
         temp = get_key(queue[*i]);
         if(temp.compare(min_str) < 0){
             min_str = temp;
-            temp_i = i;
+            min_i = i;
+            continue;
         }
 
-        if(temp.compare(min_str) == 0)               //if two is equal merge them to a new set.
-            merge_string(queue[*temp_i], queue[*i]);
-
+        if(temp.compare(min_str) == 0){               //if two is equal merge them to a new set.
+            merge_string(queue[*min_i], queue[*i]);
+        }
     }
-
-    write_down(queue[*temp_i], index_name);
+    write_down(queue[*min_i], index_name);
 }
 
 
 void merge_string(string& a, string& b){
-    a = get_key(a) + get_value(a) + get_value(b) + "\n";
+    a = get_key(a) + get_value(a) + get_value(b);
     b.clear();
 }
 
 string get_key(string line){
-    string a="";
+    string a;
     for(auto i: line){
         if(i == ' ') break;
         a += i;
@@ -391,20 +395,23 @@ string get_key(string line){
 }
 
 string get_value(string line){
-    string a="";
-    bool value = false;
+    short count = 0;
     for(auto i: line){
-        if(i != ' ' and !value) {
-            value = true;
-            continue;
-        }
-        if(i == '\n')
+        count += 1;
+        if(i == ' '){
+            count--;
             break;
-        a += i;
+        }
     }
+#ifdef MERGE_DEBUG_GET_VALUE
+    cout<<"LINE IS: "<<line<<endl;
+    cout<<"COUNT: "<<count<<endl;
+    cout<<"SUB STRING: "<<line.substr(count, line.size() - count + 1)<<endl;
+#endif
+    return line.substr(count, line.size() - count + 1);
 }
 
 void write_down(string& line, fstream& index_file){
-    index_file<<line;
+    index_file<<line<<endl;
     line.clear();
 }
