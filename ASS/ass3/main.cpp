@@ -28,11 +28,15 @@ void merge_string(string& a, string& b);
 void write_down(string& line, fstream& index_file);
 void merge_all_block(vector<string> index_line[], string index_name, fstream index_file[], const int each_block_size);
 void merge_index(string index_name);
-string search_pattern(long long& start, long long& end, fstream& file, string pattern);
-
+string search_pattern(long long start, long long end, fstream& file, string pattern);
+vector<pair<int,int>>  split(string str);
+bool contain(vector<pair<int,int>> result, short& pos, int compare);
+map<int, int> check_file(vector<pair<int,int>> result[], short len);
+string search_word(string pattern[], fstream& file, short len);
 
 int memory_counter = 0;
 short index_no = 0;//TODO might be wrong.
+vector<string> files;
 
 
 struct field_reader: std::ctype<char> {
@@ -58,7 +62,6 @@ int main(int argc, char* argv[]) {
 
 #endif
     cout<<"start"<<endl;
-    vector<string> files;
     map<string, map<int, int>> index;
 
 #ifdef SEARCH_PATTERN
@@ -93,10 +96,9 @@ int main(int argc, char* argv[]) {
 #else
     fstream file;
     file.open("my.index", ios::in|ios::out);
-    file.seekg(0, ios::end);
-    long long end = file.tellg();
-    long long start = 0;
-    cout<<search_pattern(start, end, file, "plaignent");
+    string word[] = {"appl", "iphone"};
+    string result = search_word(word, file, 2);
+    cout<<result<<endl;
 #endif
     return 0;
 }
@@ -443,36 +445,69 @@ void write_down(string& line, fstream& index_file){
 //    search_word(pattern, file, index);
 //}
 //
-//string search_word(string pattern, fstream& file){
-//    float assum = (int(pattern[0]) - int('a'))/(int('z') - int('a'));
-//    file.seekg(0, ios::end);
-//    long long start = 0;
-//    long long end = file.tellg();
-//    long long now = long(assum*end);
-//
-//    file.seekg(now, ios::beg);
-//    string word;
-//    getline(file, word);
-//    while(getline(file, word)){
-//        string temp = get_key(word);
-//        if(temp.compare(pattern) == 0){
-//            return get_value(word);
-//        }
-//        if(temp.compare(pattern) < 0){
-//            next_seek(now, end, file);
-//        }else{
-//            next_seek(start, now, file);
-//        }
-//    }
-//}
+string search_word(string pattern[], fstream& file, short len) {
+    file.seekg(0, ios::end);
+    long long end = file.tellg();
+    long long start = 0;
+    vector<pair<int, int>> result[len];
 
-string search_pattern(long long& start, long long& end, fstream& file, string pattern){
+    for (short i = 0; i < len; ++i) {
+        string a = search_pattern(start, end, file, pattern[i]);
+        if (a.empty())
+            return "";
+        result[len] = split(get_value(a));
+    }
+
+    map<int, int> file_result = check_file(result, len);
+    for (map<int, int>::iterator i = file_result.begin(); i != file_result.end(); ++i) {
+        cout<<files[i->second]<<endl;
+    }
+}
+
+map<int, int> check_file(vector<pair<int,int>> result[], short len){
+    short num[len] = {0};
+    vector<pair<int, int>> all;
+    pair<int, int> temp = result[0][0];
+
+    map<int, int> ret;
+    for(short i=0; i<result[0].size(); i++){
+        bool in = true;
+        int temp_value = 0;
+        for(short j=0; j<len; j++){
+            if(!contain(result[j], num[j], result[0][i].first)){
+                in = false;
+                break;
+            }
+            temp_value += result[0][i].second;
+        }
+        if(in)
+            ret.insert(pair<int, int>(temp_value, result[0][i].first));
+    }
+
+    return ret;
+}
+
+bool contain(vector<pair<int,int>> result, short& pos, int compare){
+    for(; pos<result.size();){
+        if(result[pos].first == compare)
+            return true;
+        if(result[pos].first < compare)
+            pos++;
+        else
+            return false;
+    }
+}
+
+
+string search_pattern(long long start, long long end, fstream& file, string pattern){
     string word;
-    if ((end - start) < 200){
+    if ((end - start) < 100){
         file.seekg(start, ios::beg);
         while(getline(file, word)){
             if(get_key(word).compare(pattern) == 0)
                 return word;
+            if(file.tellg() > end)
+                return "";
         }
     }
 
@@ -481,13 +516,36 @@ string search_pattern(long long& start, long long& end, fstream& file, string pa
     getline(file, word);
     getline(file, word);
     string key = get_key(word);
+    cout<<"PATTERN: "<<pattern<<"  search: "<<key<<endl;
     short compare = key.compare(pattern);
-    if(compare == 0)
+    if(compare == 0){
+        cout<<"RETURN: "<<word<<endl;
         return word;
-    if(compare < 0){
-        search_pattern(start, now, file, pattern);
-    }else{
-        search_pattern(now, end, file, pattern);
     }
+    if(compare > 0){
+        word = search_pattern(start, now, file, pattern);
+    }else{
+        word = search_pattern(now, end, file, pattern);
+    }
+    return word;
 }
 
+/*
+ * help function:
+ */
+vector<pair<int,int>>  split(string str){
+    stringstream ss(str); // Insert the string into a stream
+
+    vector<pair<int,int>> tokens; // Create vector to hold our words
+    pair<int, int> temp, word;
+
+    while (ss >> temp.first and ss>>temp.second){
+        if(word.first == temp.first){
+            temp.second += word.second;
+        }else{
+            tokens.push_back(temp);
+        }
+        word = temp;
+    }
+    return tokens;
+}
