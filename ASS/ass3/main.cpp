@@ -28,6 +28,8 @@ void merge_string(string& a, string& b);
 void write_down(string& line, fstream& index_file);
 void merge_all_block(vector<string> index_line[], string index_name, fstream index_file[], const int each_block_size);
 void merge_index(string index_name);
+string search_pattern(long long& start, long long& end, fstream& file, string pattern);
+
 
 int memory_counter = 0;
 short index_no = 0;//TODO might be wrong.
@@ -59,6 +61,7 @@ int main(int argc, char* argv[]) {
     vector<string> files;
     map<string, map<int, int>> index;
 
+#ifdef SEARCH_PATTERN
 
 #ifndef CREATE_INDEX_DEBUG
     files.push_back("../asset/simple/file1.txt");
@@ -86,6 +89,14 @@ int main(int argc, char* argv[]) {
 //    pattern = get_pattern(argv[]);
 //    search(pattern);
 #endif
+#endif
+#else
+    fstream file;
+    file.open("my.index", ios::in|ios::out);
+    file.seekg(0, ios::end);
+    long long end = file.tellg();
+    long long start = 0;
+    cout<<search_pattern(start, end, file, "plaignent");
 #endif
     return 0;
 }
@@ -249,7 +260,7 @@ void merge_index(string index_name){
     vector<string> index_line[index_no];    //store the line in each index file;
 
     for(int i=0; i<index_no; ++i){
-        printf("index %d: initialized.\n");
+        printf("index: initialized.\n");
         string temp_index = to_string(i);
         index_file[i].open(temp_index.c_str(), fstream::in);
         load_block(index_line[i], index_file[i], each_block_size);
@@ -415,3 +426,68 @@ void write_down(string& line, fstream& index_file){
     index_file<<line<<endl;
     line.clear();
 }
+
+/*
+ * load data from index.
+ * search required data.
+ * binary search.
+ *
+ */
+//void search_pattern(){
+//    load_all_pattern_index;
+//    select_aviable_target;
+//    print_out;
+//}
+//
+//void load all pattern{
+//    search_word(pattern, file, index);
+//}
+//
+//string search_word(string pattern, fstream& file){
+//    float assum = (int(pattern[0]) - int('a'))/(int('z') - int('a'));
+//    file.seekg(0, ios::end);
+//    long long start = 0;
+//    long long end = file.tellg();
+//    long long now = long(assum*end);
+//
+//    file.seekg(now, ios::beg);
+//    string word;
+//    getline(file, word);
+//    while(getline(file, word)){
+//        string temp = get_key(word);
+//        if(temp.compare(pattern) == 0){
+//            return get_value(word);
+//        }
+//        if(temp.compare(pattern) < 0){
+//            next_seek(now, end, file);
+//        }else{
+//            next_seek(start, now, file);
+//        }
+//    }
+//}
+
+string search_pattern(long long& start, long long& end, fstream& file, string pattern){
+    string word;
+    if ((end - start) < 200){
+        file.seekg(start, ios::beg);
+        while(getline(file, word)){
+            if(get_key(word).compare(pattern) == 0)
+                return word;
+        }
+    }
+
+    long long now = (start + end)/2;
+    file.seekg(now, ios::beg);
+    getline(file, word);
+    getline(file, word);
+    string key = get_key(word);
+    short compare = key.compare(pattern);
+    if(compare == 0)
+        return word;
+    if(compare < 0){
+        search_pattern(start, now, file, pattern);
+    }else{
+        search_pattern(now, end, file, pattern);
+    }
+}
+

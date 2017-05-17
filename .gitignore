@@ -53,7 +53,8 @@ build/
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
-
+*.xml
+*.txt
 *_i.c
 *_p.c
 *.ilk
@@ -263,6 +264,9 @@ fabric.properties
 
 *.bwt
 
-ASS/*/cmake-build-debug/*
+cmake-build-debug/*
 *.xml
 ASS/ass2/.idea/workspace.xml
+ASS/ass1/1
+*.out
+ASS/ass1/2

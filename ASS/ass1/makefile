@@ -1,11 +1,7 @@
-CC=gcc -std=c99
-all: rlencode rldecode
+CC=g++ -std=c++11
+all: bwtsearch
 
-rlencode: rlencode.c
-	$(CC) rlencode.c -o rlencode
-
-rldecode: rldecode.c
-	$(CC) rldecode.c -o rldecode
-
+bwtsearch: bwtsearch.cpp
+	$(CC) bwtsearch.c -o bwtsearch
 clean:
-	rm rldecode rlencode
+	rm bwtsearch
