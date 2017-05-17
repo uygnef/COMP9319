@@ -32,7 +32,10 @@ string search_pattern(long long start, long long end, fstream& file, string patt
 vector<pair<int,int>>  split(string str);
 bool contain(vector<pair<int,int>> result, short& pos, int compare);
 multimap<int, int> check_file(vector<pair<int,int>> result[], short len);
-string search_word(string pattern[], fstream& file, short len);
+multimap<int, int> search_word(string pattern[], fstream& file, short len);
+string clean_path(string path);
+
+
 
 int memory_counter = 0;
 short index_no = 0;//TODO might be wrong.
@@ -62,7 +65,7 @@ int main(int argc, char* argv[]) {
 #endif
     cout<<"start"<<endl;
     map<string, map<int, int>> index;
-    vector<string> files;
+    vector<string> files = get_all_files("../asset/books200m");
 
 #ifdef SEARCH_PATTERN
 
@@ -97,10 +100,24 @@ int main(int argc, char* argv[]) {
     fstream file;
     file.open("my.index", ios::in|ios::out);
     string word[] = {"appl", "lengthen"};
-    string result = search_word(word, file, 2);
-    cout<<result<<endl;
+    multimap<int, int> result = search_word(word, file, 2);
+    for (multimap<int, int>::iterator i = result.end(); i != result.begin();) {
+        i--;
+        cout<<clean_path(files[i->second])<<" "<<i->first<<endl;
+    }
 #endif
     return 0;
+}
+
+string clean_path(string path){
+    string temp;
+    for(auto i:path){
+        if(i == '/')
+            temp = "";
+        else
+            temp += i;
+    }
+    return temp;
 }
 
 int create_index(map<string, map<int, int>>& index, vector<string> file_list){
@@ -445,27 +462,24 @@ void write_down(string& line, fstream& index_file){
 //    search_word(pattern, file, index);
 //}
 //
-string search_word(string pattern[], fstream& file, short len) {
+multimap<int, int> search_word(string pattern[], fstream& file, short len) {
 
     file.seekg(0, ios::end);
     long long end = file.tellg();
     long long start = 0;
     vector<pair<int, int>> result[len];
-
+    multimap<int, int> file_result;
     for (short i = 0; i < len; ++i) {
         string a = search_pattern(start, end, file, pattern[i]);
         if (a.empty())
-            return "";
+            return file_result;
         result[i] = split(get_value(a));
     }
 
     cout<<"RESULT SIZE: "<<result->size()<<endl;
-    multimap<int, int> file_result = check_file(result, len);
-    for (map<int, int>::iterator i = file_result.end(); i != file_result.begin();) {
-        i--;
-        cout<<i->second<<" "<<i->first<<endl;
-    }
-    return "lalala";
+    file_result = check_file(result, len);
+
+    return file_result;
 }
 
 multimap<int, int> check_file(vector<pair<int,int>> result[], short len){
