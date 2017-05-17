@@ -31,12 +31,11 @@ void merge_index(string index_name);
 string search_pattern(long long start, long long end, fstream& file, string pattern);
 vector<pair<int,int>>  split(string str);
 bool contain(vector<pair<int,int>> result, short& pos, int compare);
-map<int, int> check_file(vector<pair<int,int>> result[], short len);
+multimap<int, int> check_file(vector<pair<int,int>> result[], short len);
 string search_word(string pattern[], fstream& file, short len);
 
 int memory_counter = 0;
 short index_no = 0;//TODO might be wrong.
-vector<string> files;
 
 
 struct field_reader: std::ctype<char> {
@@ -63,6 +62,7 @@ int main(int argc, char* argv[]) {
 #endif
     cout<<"start"<<endl;
     map<string, map<int, int>> index;
+    vector<string> files;
 
 #ifdef SEARCH_PATTERN
 
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
 #else
     fstream file;
     file.open("my.index", ios::in|ios::out);
-    string word[] = {"appl", "iphone"};
+    string word[] = {"appl", "lengthen"};
     string result = search_word(word, file, 2);
     cout<<result<<endl;
 #endif
@@ -446,6 +446,7 @@ void write_down(string& line, fstream& index_file){
 //}
 //
 string search_word(string pattern[], fstream& file, short len) {
+
     file.seekg(0, ios::end);
     long long end = file.tellg();
     long long start = 0;
@@ -455,42 +456,53 @@ string search_word(string pattern[], fstream& file, short len) {
         string a = search_pattern(start, end, file, pattern[i]);
         if (a.empty())
             return "";
-        result[len] = split(get_value(a));
+        result[i] = split(get_value(a));
     }
 
-    map<int, int> file_result = check_file(result, len);
-    for (map<int, int>::iterator i = file_result.begin(); i != file_result.end(); ++i) {
-        cout<<files[i->second]<<endl;
+    cout<<"RESULT SIZE: "<<result->size()<<endl;
+    multimap<int, int> file_result = check_file(result, len);
+    for (map<int, int>::iterator i = file_result.end(); i != file_result.begin();) {
+        i--;
+        cout<<i->second<<" "<<i->first<<endl;
     }
+    return "lalala";
 }
 
-map<int, int> check_file(vector<pair<int,int>> result[], short len){
+multimap<int, int> check_file(vector<pair<int,int>> result[], short len){
+    cout<<"CHECK FILE\n";
     short num[len] = {0};
     vector<pair<int, int>> all;
-    pair<int, int> temp = result[0][0];
 
-    map<int, int> ret;
+    multimap<int, int> ret;
     for(short i=0; i<result[0].size(); i++){
         bool in = true;
-        int temp_value = 0;
-        for(short j=0; j<len; j++){
+        int temp_value = result[0][i].second;
+        for(short j=1; j<len; j++){
             if(!contain(result[j], num[j], result[0][i].first)){
+              //  cout<<"NOT CONTAIN\n";
                 in = false;
                 break;
             }
-            temp_value += result[0][i].second;
+            temp_value += result[j][num[j]].second;
         }
-        if(in)
+        if(in) {
+            cout<<"IN: "<<result[0][i].first<<endl;
             ret.insert(pair<int, int>(temp_value, result[0][i].first));
+        }
     }
-
+    cout<<"FINSH"<<endl;
     return ret;
 }
 
 bool contain(vector<pair<int,int>> result, short& pos, int compare){
+    if(pos >= result.size()){
+        cout<<"OUT OF RANGE"<<endl;
+        return false;
+    }
     for(; pos<result.size();){
-        if(result[pos].first == compare)
+        if(result[pos].first == compare){
             return true;
+        }
         if(result[pos].first < compare)
             pos++;
         else
@@ -500,6 +512,7 @@ bool contain(vector<pair<int,int>> result, short& pos, int compare){
 
 
 string search_pattern(long long start, long long end, fstream& file, string pattern){
+    cout<<"SEARCH PATTERN\n";
     string word;
     if ((end - start) < 100){
         file.seekg(start, ios::beg);
@@ -516,10 +529,10 @@ string search_pattern(long long start, long long end, fstream& file, string patt
     getline(file, word);
     getline(file, word);
     string key = get_key(word);
-    cout<<"PATTERN: "<<pattern<<"  search: "<<key<<endl;
+ //   cout<<"PATTERN: "<<pattern<<"  search: "<<key<<endl;
     short compare = key.compare(pattern);
     if(compare == 0){
-        cout<<"RETURN: "<<word<<endl;
+ //       cout<<"RETURN: "<<word<<endl;
         return word;
     }
     if(compare > 0){
