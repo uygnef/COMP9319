@@ -1,12 +1,18 @@
 #include <iostream>
 #include <array>
-#include <string>
+#include <cstring>
 #include <map>
 #include <fstream>
 #include <vector>
 #include <dirent.h>
-#include "smassung-porter2_stemmer/porter2_stemmer.h"
-#include "smassung-porter2_stemmer/porter2_stemmer.cpp"
+#include <algorithm>
+#include <sstream>
+#include <unordered_map>
+#include <string>
+
+extern "C"{
+#include "stmr.h"
+}
 
 using namespace std;
 
@@ -14,11 +20,11 @@ using namespace std;
 #define INPUT_DEBUG
 
 #define ALL_READ_BLOCK_SIZE 15000000
-void add_one(map<string, map<int, int>>& index, string word, int file_no);
-void update_index(map<string, map<int, int>>& index, string files, int file_no);
-int create_index( map<string, map<int, int>>& index, vector<string> file_list);
+void add_one(map<string, vector<pair<int, int>>>& index, string word, int file_no);
+void update_index(map<string, vector<pair<int, int>>>& index, string files, short file_no);
+int create_index(map<string, vector<pair<int, int>>>& index, vector<string> file_list);
 vector<string> get_all_files(string path);
-void write_index_to_file(string file_name, map<string, map<int, int>>& index);
+void write_index_to_file(string file_name, map<string, vector<pair<int, int>>>& index);
 int load_block(vector<string>& store_list, fstream& file, const int block_size);
 string load(int& index_pos, vector<string>& index_line, fstream& index_file, int block_size);
 void compare_and_write(string queue[], vector<short>& remain, fstream& index_name);
@@ -36,9 +42,8 @@ multimap<int, int> search_word(string pattern[], fstream& file, short len);
 string clean_path(string path);
 
 
-
 int memory_counter = 0;
-short index_no = 0;//TODO might be wrong.
+int index_no = 0;//TODO might be wrong.
 
 
 struct field_reader: std::ctype<char> {
@@ -57,17 +62,34 @@ struct field_reader: std::ctype<char> {
 int main(int argc, char* argv[]) {
 #ifndef INPUT_DEBUG
     bool concept = true;
-    if(argv[2] != "-c"){
+    int word_len;
+
+    if(strcmp(argv[3], "-c") != 0){
+        cout<<"NOT -c"<<endl;
         concept = false;
+        word_len = argc - 3;
+    }else{
+        word_len = argc -5;
     }
+    cout<<word_len<<endl;
     string path = argv[1];
+    string word[word_len];
+    for(int i= 0; i<word_len; i++){
+        if(concept)
+            word[i] = argv[5 + i];
+        else
+            word[i] = argv[3+i];
+        Porter2Stemmer::trim(word[i]);
+        Porter2Stemmer::stem(word[i]);
+        cout<<i<<"  "<<word[i]<<endl;
+    }
 
 #endif
     cout<<"start"<<endl;
-    map<string, map<int, int>> index;
     vector<string> files = get_all_files("../asset/books200m");
+    map<string, vector<pair<int, int>>> index;
 
-#ifdef SEARCH_PATTERN
+#ifndef SEARCH_PATTERN
 
 #ifndef CREATE_INDEX_DEBUG
     files.push_back("../asset/simple/file1.txt");
@@ -99,8 +121,10 @@ int main(int argc, char* argv[]) {
 #else
     fstream file;
     file.open("my.index", ios::in|ios::out);
-    string word[] = {"appl", "lengthen"};
-    multimap<int, int> result = search_word(word, file, 2);
+    string word[] = {"appl", "rive"};
+    short word_len = 2;
+    multimap<int, int> result = search_word(word, file, word_len);
+    cout<<"search finish"<<endl;
     for (multimap<int, int>::iterator i = result.end(); i != result.begin();) {
         i--;
         cout<<clean_path(files[i->second])<<" "<<i->first<<endl;
@@ -120,9 +144,9 @@ string clean_path(string path){
     return temp;
 }
 
-int create_index(map<string, map<int, int>>& index, vector<string> file_list){
+int create_index(map<string, vector<pair<int, int>>>& index, vector<string> file_list){
 
-    for(int i=0; i < file_list.size(); ++i){
+    for(short i=0; i < file_list.size(); ++i){
 #ifndef CREATE_INDEX_DEBUG
         cout<<file_list[i]<<endl;
 #endif
@@ -133,6 +157,7 @@ int create_index(map<string, map<int, int>>& index, vector<string> file_list){
     if(not index.empty()){ //deal with the last index in memory.
         write_index_to_file(to_string(index_no), index);
         index_no++;
+        index.clear();
     }
 
 
@@ -142,7 +167,7 @@ int create_index(map<string, map<int, int>>& index, vector<string> file_list){
 
 }
 
-void update_index(map<string, map<int, int>>& index, string files, int file_no){
+void update_index(map<string, vector<pair<int, int>>>& index, string files, short file_no){
     fstream file;
     string word;
 
@@ -165,8 +190,15 @@ void update_index(map<string, map<int, int>>& index, string files, int file_no){
 #ifndef CREATE_INDEX_DEBUG
         cout<<word<<" ";
 #endif
-        Porter2Stemmer::trim(word);
-        Porter2Stemmer::stem(word);
+        //  Porter2Stemmer::trim(word);
+        transform(word.begin(), word.end(), word.begin(), ::tolower);
+        string temp_word = word;
+        char *cstr = &word[0u];
+        cstr[stem(cstr, 0, word.size() -1) + 1] = 0;
+        word = string(cstr);
+//        if(word.compare(temp_word) != 0){
+//            cout<<temp_word<<" "<<word<<endl;
+//        }
 #ifndef CREATE_INDEX_DEBUG
         cout<<word<<endl;
 #endif
@@ -174,36 +206,34 @@ void update_index(map<string, map<int, int>>& index, string files, int file_no){
 /*
  * when have used all memory, write index to the disk.
  */
-        if (memory_counter>15000000){ //make sure will not run out of memory
+        if (memory_counter>5000000){ //make sure will not run out of memory
             write_index_to_file(to_string(index_no), index);
+            cout<<index_no<<" BREAK AT: "<<file_no<<endl;
             index_no++;
-            return;
         }
     }
 
 }
 
-void add_one(map<string, map<int, int>>& index, string word, int file_no){
-    map<string, map<int, int>>::iterator it;
-    map<int, int>::iterator it_2;
+void add_one(map<string, vector<pair<int, int>>>& index, string word, int file_no){
+    map<string, vector<pair<int, int>>>::iterator it;
 
     it = index.find(word);
-    if (it == index.end()){
-        map<int, int> occur;
-        occur.insert(pair<int, int>(file_no, 1));
-        index.insert(pair<string, map<int, int>>(word, occur));
-        memory_counter += (word.size() + 4 + 4);
-    }else{
 
-        it_2 = it->second.find(file_no);
-        if(it_2 == it->second.end()){
-            it->second.insert(pair<int, int>(file_no, 1));
-            memory_counter += 4 + 4;
-        }else{
-            it_2->second += 1;
+    if (it == index.end()){
+
+        vector<pair<int, int>> list;
+        list.push_back(pair<int, int>(file_no, 1));
+        index.insert(pair<string, vector<pair<int, int>>>(word, list));
+        memory_counter += (word.size() + 20);
+    }else{
+        if(file_no == it->second.back().first)
+            it->second.back().second += 1;
+        else{
+            it->second.push_back(pair<int, int>(file_no, 1));
+            memory_counter += 20;
         }
     }
-    memory_counter += 5;
 }
 
 /* Returns a list of files in a directory (except the ones that begin with a dot) */
@@ -232,7 +262,7 @@ vector<string> get_all_files(string path) {
  * write index to file:
  * when memory is full, put index map into the file
  */
-void write_index_to_file(string file_name, map<string, map<int, int>>& index){
+void write_index_to_file(string file_name, map<string, vector<pair<int, int>>>& index){
     ofstream file;
     file.open(file_name);
     if(file.fail()){
@@ -330,11 +360,14 @@ int load_block(vector<string>& store_list, fstream& file, const int block_size){
 void merge_all_block(vector<string> index_line[], string index_name, fstream index_file[], const int each_block_size){
     printf("merge all block.\n");
 
-    int index_pos[index_no] = {0};
+    int index_pos[index_no];
+    for(short i=0; i<index_no; ++i){
+        index_pos[i] = 0;
+    }
     string queue[index_no];
 
     for(short i=0; i<index_no; ++i){ // load data to queue. initialized
-            queue[i] = load(index_pos[i], index_line[i], index_file[i], each_block_size);
+        queue[i] = load(index_pos[i], index_line[i], index_file[i], each_block_size);
     }
     vector<short> remain_file;//if remain file is empty, merge is done.
     for(short i=0; i < index_no; ++i){
@@ -342,16 +375,17 @@ void merge_all_block(vector<string> index_line[], string index_name, fstream ind
     }
 
     fstream file;
-    file.open(index_name, ios::in | ios::out);
+    file.open(index_name, ios::out);
     if(file.fail()){
         printf("OPEN INDEX FILE ERROR.");
         return;
     }
+    cout<<"index_name";
     while(!remain_file.empty()){
         compare_and_write(queue, remain_file, file);
         for(auto i:remain_file){
-             if(queue[i].empty())
-                 queue[i] = load(index_pos[i], index_line[i], index_file[i], each_block_size);
+            if(queue[i].empty())
+                queue[i] = load(index_pos[i], index_line[i], index_file[i], each_block_size);
         }
     }
 }
@@ -370,7 +404,7 @@ string load(int& index_pos, vector<string>& index_line, fstream& index_file, int
         return "EOF";
     }
 
-        string data = index_line[index_pos];
+    string data = index_line[index_pos];
     index_pos++;
     return data;
 }
@@ -469,6 +503,7 @@ multimap<int, int> search_word(string pattern[], fstream& file, short len) {
     long long start = 0;
     vector<pair<int, int>> result[len];
     multimap<int, int> file_result;
+    cout<<"search word LEN:"<<len<<endl;
     for (short i = 0; i < len; ++i) {
         string a = search_pattern(start, end, file, pattern[i]);
         if (a.empty())
@@ -484,16 +519,18 @@ multimap<int, int> search_word(string pattern[], fstream& file, short len) {
 
 multimap<int, int> check_file(vector<pair<int,int>> result[], short len){
     cout<<"CHECK FILE\n";
-    short num[len] = {0};
+    short num[len];
     vector<pair<int, int>> all;
-
+    for(int i= 0; i<len; i++){
+        num[i] = 0;
+    }
     multimap<int, int> ret;
     for(short i=0; i<result[0].size(); i++){
         bool in = true;
         int temp_value = result[0][i].second;
         for(short j=1; j<len; j++){
             if(!contain(result[j], num[j], result[0][i].first)){
-              //  cout<<"NOT CONTAIN\n";
+                //  cout<<"NOT CONTAIN\n";
                 in = false;
                 break;
             }
@@ -543,10 +580,10 @@ string search_pattern(long long start, long long end, fstream& file, string patt
     getline(file, word);
     getline(file, word);
     string key = get_key(word);
- //   cout<<"PATTERN: "<<pattern<<"  search: "<<key<<endl;
+    //   cout<<"PATTERN: "<<pattern<<"  search: "<<key<<endl;
     short compare = key.compare(pattern);
     if(compare == 0){
- //       cout<<"RETURN: "<<word<<endl;
+        //       cout<<"RETURN: "<<word<<endl;
         return word;
     }
     if(compare > 0){
