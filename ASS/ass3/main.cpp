@@ -21,8 +21,8 @@ using namespace std;
 
 #define ALL_READ_BLOCK_SIZE 15000000
 void add_one(map<string, vector<pair<int, int>>>& index, string word, int file_no);
+int create_index(vector<string> file_list, string merge_index_name);
 void update_index(map<string, vector<pair<int, int>>>& index, string files, short file_no);
-int create_index(map<string, vector<pair<int, int>>>& index, vector<string> file_list);
 vector<string> get_all_files(string path);
 void write_index_to_file(string file_name, map<string, vector<pair<int, int>>>& index);
 int load_block(vector<string>& store_list, fstream& file, const int block_size);
@@ -40,10 +40,11 @@ bool contain(vector<pair<int,int>> result, short& pos, int compare);
 multimap<int, int> check_file(vector<pair<int,int>> result[], short len);
 multimap<int, int> search_word(string pattern[], fstream& file, short len);
 string clean_path(string path);
+void trans_stem(string& word);
 
 
-int memory_counter = 0;
-int index_no = 0;//TODO might be wrong.
+int memory_counter = 0; //counter: after run out of memory, write sub index into disk.
+int index_no = 0;//counter: record  the number of index.
 
 
 struct field_reader: std::ctype<char> {
@@ -60,7 +61,7 @@ struct field_reader: std::ctype<char> {
 
 
 int main(int argc, char* argv[]) {
-#ifndef INPUT_DEBUG
+#ifdef INPUT_DEBUG
     bool concept = true;
     int word_len;
 
@@ -74,22 +75,23 @@ int main(int argc, char* argv[]) {
     cout<<word_len<<endl;
     string path = argv[1];
     string word[word_len];
+    string merge_index_name = argv[2];
     for(int i= 0; i<word_len; i++){
         if(concept)
             word[i] = argv[5 + i];
         else
             word[i] = argv[3+i];
-        Porter2Stemmer::trim(word[i]);
-        Porter2Stemmer::stem(word[i]);
+        trans_stem(word[i]);
         cout<<i<<"  "<<word[i]<<endl;
     }
+
+
 
 #endif
     cout<<"start"<<endl;
     vector<string> files = get_all_files("../asset/books200m");
     map<string, vector<pair<int, int>>> index;
 
-#ifndef SEARCH_PATTERN
 
 #ifndef CREATE_INDEX_DEBUG
     files.push_back("../asset/simple/file1.txt");
@@ -105,12 +107,14 @@ int main(int argc, char* argv[]) {
         }
     }
 #else
-    string path = "../asset/books200m";
+//    string path = "../asset/books200m";
     files = get_all_files(path);
 #ifndef MERGE_TEXT
-    create_index(index, files);
+    ifstream infile(merge_index_name.c_str());
+    if(!infile.good())
+        create_index(files, merge_index_name);
 #else
-    index_no = 13;
+    index_no = 13;  //test for merge index
     printf("start merge index.\n");
     string merge_index_name = "my.index";
     merge_index(merge_index_name);
@@ -118,18 +122,18 @@ int main(int argc, char* argv[]) {
 //    search(pattern);
 #endif
 #endif
-#else
+
     fstream file;
-    file.open("my.index", ios::in|ios::out);
-    string word[] = {"appl", "rive"};
-    short word_len = 2;
-    multimap<int, int> result = search_word(word, file, word_len);
+    file.open(merge_index_name.c_str(), ios::in|ios::out);
+    if(!file.good())
+        cout<<"OPEN FINAL INDEX FILE ERROR.\n";
+    multimap<int, int> result = search_word(word, file, (short)word_len);
     cout<<"search finish"<<endl;
     for (multimap<int, int>::iterator i = result.end(); i != result.begin();) {
         i--;
         cout<<clean_path(files[i->second])<<" "<<i->first<<endl;
     }
-#endif
+
     return 0;
 }
 
@@ -144,8 +148,8 @@ string clean_path(string path){
     return temp;
 }
 
-int create_index(map<string, vector<pair<int, int>>>& index, vector<string> file_list){
-
+int create_index(vector<string> file_list, string merge_index_name){
+    map<string, vector<pair<int, int>>> index;
     for(short i=0; i < file_list.size(); ++i){
 #ifndef CREATE_INDEX_DEBUG
         cout<<file_list[i]<<endl;
@@ -160,9 +164,7 @@ int create_index(map<string, vector<pair<int, int>>>& index, vector<string> file
         index.clear();
     }
 
-
     printf("start merge index.\n");
-    string merge_index_name = "my.index";
     merge_index(merge_index_name);
 
 }
@@ -190,16 +192,15 @@ void update_index(map<string, vector<pair<int, int>>>& index, string files, shor
 #ifndef CREATE_INDEX_DEBUG
         cout<<word<<" ";
 #endif
-        //  Porter2Stemmer::trim(word);
         transform(word.begin(), word.end(), word.begin(), ::tolower);
         string temp_word = word;
         char *cstr = &word[0u];
         cstr[stem(cstr, 0, word.size() -1) + 1] = 0;
         word = string(cstr);
-//        if(word.compare(temp_word) != 0){
-//            cout<<temp_word<<" "<<word<<endl;
-//        }
+
 #ifndef CREATE_INDEX_DEBUG
+        if(word.compare(temp_word) != 0)
+            cout<<temp_word<<" "<<word<<endl;
         cout<<word<<endl;
 #endif
         add_one(index, word, file_no);
@@ -214,6 +215,19 @@ void update_index(map<string, vector<pair<int, int>>>& index, string files, shor
     }
 
 }
+/*
+ * stem word
+ */
+
+void trans_stem(string& word){
+    transform(word.begin(), word.end(), word.begin(), ::tolower);
+    string temp_word = word;
+    char *cstr = &word[0u];
+    cstr[stem(cstr, 0, word.size() -1) + 1] = 0;
+    word = string(cstr);
+}
+
+
 
 void add_one(map<string, vector<pair<int, int>>>& index, string word, int file_no){
     map<string, vector<pair<int, int>>>::iterator it;
@@ -299,11 +313,12 @@ void write_index_to_file(string file_name, map<string, vector<pair<int, int>>>& 
  */
 
 void merge_index(string index_name){
+
     if (index_no == 1){ //if only have one index, just rename it and return.
         rename("0", index_name.c_str());
         return;
     }
-    const int each_block_size = ALL_READ_BLOCK_SIZE/index_no;
+    const int each_block_size = ALL_READ_BLOCK_SIZE/index_no; //set buffer fir each sub index file;
 
     fstream index_file[index_no];           //store open file pointer
     vector<string> index_line[index_no];    //store the line in each index file;
@@ -329,7 +344,7 @@ int load_block(vector<string>& store_list, fstream& file, const int block_size){
         printf("SUB INDEX LIST NOT EMPTY.\n");
         return -1;
     }
-    /*file is closed, means has merge this file.
+    /*file is closed, this file has been merged .
      *
      */
     printf("load block.\n");
@@ -613,3 +628,6 @@ vector<pair<int,int>>  split(string str){
     }
     return tokens;
 }
+
+
+/
