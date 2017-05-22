@@ -9,10 +9,14 @@
 #include <sstream>
 #include <unordered_map>
 #include <string>
-
+//
 extern "C"{
 #include "stmr.h"
 }
+//
+//extern  "C"{
+//#include "WordNet-3.0/include/wn.h"
+//}
 
 using namespace std;
 
@@ -58,21 +62,37 @@ struct field_reader: std::ctype<char> {
     }
 };
 
-
+//void trans_concept(){
+//    vector<string> result;
+////    for(int i=0; i< len; i++){
+////        char news[] = result[i].c_str();
+////    }
+////    char *morphword(char *word, int pos);
+//    SynsetPtr SynPtr, next,HypePtr,hypeNext;
+//    char word[] = "apple";
+//    char *wordIn;
+//    //得到word参数的原型  
+//    if(morphstr(word,10)){
+//        wordIn = morphstr(word,10);
+//    }
+//    //cout<<"la"<<wordIn<<endl;
+//
+//}
 
 int main(int argc, char* argv[]) {
+#ifndef NAIVE_CONCEPT_SEARCH
 #ifdef INPUT_DEBUG
     bool concept = true;
     int word_len;
 
     if(strcmp(argv[3], "-c") != 0){
-        cout<<"NOT -c"<<endl;
+        ////cout<<"NOT -c"<<endl;
         concept = false;
         word_len = argc - 3;
     }else{
         word_len = argc -5;
     }
-    cout<<word_len<<endl;
+    ////cout<<word_len<<endl;
     string path = argv[1];
     string word[word_len];
     string merge_index_name = argv[2];
@@ -82,14 +102,14 @@ int main(int argc, char* argv[]) {
         else
             word[i] = argv[3+i];
         trans_stem(word[i]);
-        cout<<i<<"  "<<word[i]<<endl;
+        ////cout<<i<<"  "<<word[i]<<endl;
     }
 
 
 
 #endif
-    cout<<"start"<<endl;
-    vector<string> files = get_all_files("../asset/books200m");
+    ////cout<<"start"<<endl;
+ //   vector<string> files = get_all_files("../asset/books200m");
     map<string, vector<pair<int, int>>> index;
 
 
@@ -103,19 +123,20 @@ int main(int argc, char* argv[]) {
     for(auto it = index.begin(); it != index.end(); ++it)
     {
         for(auto it2 = it->second.begin(); it2 != it->second.end(); ++it2){
-            cout << it->first << " " << it2->first << " " << it2->second << "\n";
+            ////cout << it->first << " " << it2->first << " " << it2->second << "\n";
         }
     }
 #else
-//    string path = "../asset/books200m";
-    files = get_all_files(path);
+
+    ////cout<<"PATH IS: "<<path<<endl;
+    vector<string> files = get_all_files(path);
 #ifndef MERGE_TEXT
     ifstream infile(merge_index_name.c_str());
     if(!infile.good())
         create_index(files, merge_index_name);
 #else
     index_no = 13;  //test for merge index
-    printf("start merge index.\n");
+    //printf("start merge index.\n");
     string merge_index_name = "my.index";
     merge_index(merge_index_name);
 //    pattern = get_pattern(argv[]);
@@ -125,15 +146,29 @@ int main(int argc, char* argv[]) {
 
     fstream file;
     file.open(merge_index_name.c_str(), ios::in|ios::out);
-    if(!file.good())
-        cout<<"OPEN FINAL INDEX FILE ERROR.\n";
-    multimap<int, int> result = search_word(word, file, (short)word_len);
-    cout<<"search finish"<<endl;
-    for (multimap<int, int>::iterator i = result.end(); i != result.begin();) {
-        i--;
-        cout<<clean_path(files[i->second])<<" "<<i->first<<endl;
+    if(!file.good()){
+        //cout<<endl;
+        return -1;
     }
 
+//    if(concept){
+//        vector<string> concept_word = trans_concept(word, depth);
+//        string temp_word[concept_word.size()];
+//        for(auto i; i< concept_word.size(); i++){
+//            temp_word[i] = concept_word[i];
+//        }
+//        multimap<int, int> concept_result = search_word(temp_word, file, (short)concept_word.size());
+//    }
+    multimap<int, int> result = search_word(word, file, (short)word_len);
+
+
+//    //cout<<"search finish"<<endl;
+    for (multimap<int, int>::iterator i = result.end(); i != result.begin();) {
+        i--;
+        cout<<clean_path(files[i->second])<<" "<<endl;
+    }
+#endif
+//    trans_concept();
     return 0;
 }
 
@@ -152,19 +187,19 @@ int create_index(vector<string> file_list, string merge_index_name){
     map<string, vector<pair<int, int>>> index;
     for(short i=0; i < file_list.size(); ++i){
 #ifndef CREATE_INDEX_DEBUG
-        cout<<file_list[i]<<endl;
+        //cout<<file_list[i]<<endl;
 #endif
         update_index(index, file_list[i], i);
 
     }
-    printf("Write LAST sub INDEX.\n");
+    //printf("Write LAST sub INDEX.\n");
     if(not index.empty()){ //deal with the last index in memory.
         write_index_to_file(to_string(index_no), index);
         index_no++;
         index.clear();
     }
 
-    printf("start merge index.\n");
+    //printf("start merge index.\n");
     merge_index(merge_index_name);
 
 }
@@ -175,7 +210,7 @@ void update_index(map<string, vector<pair<int, int>>>& index, string files, shor
 
     file.open(files, fstream::in);
     if(file.fail()){
-        cout<<"READ FAIL: "<<files<<endl;
+        //cout<<"READ FAIL: "<<files<<endl;
         return;
     }
 
@@ -190,7 +225,7 @@ void update_index(map<string, vector<pair<int, int>>>& index, string files, shor
 
     while(file>>word){
 #ifndef CREATE_INDEX_DEBUG
-        cout<<word<<" ";
+        //cout<<word<<" ";
 #endif
         transform(word.begin(), word.end(), word.begin(), ::tolower);
         string temp_word = word;
@@ -200,8 +235,8 @@ void update_index(map<string, vector<pair<int, int>>>& index, string files, shor
 
 #ifndef CREATE_INDEX_DEBUG
         if(word.compare(temp_word) != 0)
-            cout<<temp_word<<" "<<word<<endl;
-        cout<<word<<endl;
+            //cout<<temp_word<<" "<<word<<endl;
+        //cout<<word<<endl;
 #endif
         add_one(index, word, file_no);
 /*
@@ -209,7 +244,7 @@ void update_index(map<string, vector<pair<int, int>>>& index, string files, shor
  */
         if (memory_counter>5000000){ //make sure will not run out of memory
             write_index_to_file(to_string(index_no), index);
-            cout<<index_no<<" BREAK AT: "<<file_no<<endl;
+            //cout<<index_no<<" BREAK AT: "<<file_no<<endl;
             index_no++;
         }
     }
@@ -261,10 +296,10 @@ vector<string> get_all_files(string path) {
     dir = opendir(path.c_str());
 
     while (pdir = readdir(dir)) {
-//        cout<<pdir->d_name<<endl;
+//        //cout<<pdir->d_name<<endl;
         if(pdir->d_name[0] == '.') continue;
 #ifndef INPUT_DEBUG
-        cout<<"THIS IS "<<pdir->d_name<<endl;
+        //cout<<"THIS IS "<<pdir->d_name<<endl;
 #endif
         files.push_back(path + '/' + pdir->d_name);
     }
@@ -280,10 +315,10 @@ void write_index_to_file(string file_name, map<string, vector<pair<int, int>>>& 
     ofstream file;
     file.open(file_name);
     if(file.fail()){
-        printf("OPEN INDEX FILE ERROR.\n");
+        //printf("OPEN INDEX FILE ERROR.\n");
         return;
     }
-    printf("WRITE A index.\n");
+    //printf("WRITE A index.\n");
     for(auto it = index.begin(); it != index.end(); ++it)
     {
         file << it->first ;
@@ -324,7 +359,7 @@ void merge_index(string index_name){
     vector<string> index_line[index_no];    //store the line in each index file;
 
     for(int i=0; i<index_no; ++i){
-        printf("index: initialized.\n");
+        //printf("index: initialized.\n");
         string temp_index = to_string(i);
         index_file[i].open(temp_index.c_str(), fstream::in);
         load_block(index_line[i], index_file[i], each_block_size);
@@ -341,16 +376,16 @@ void merge_index(string index_name){
  */
 int load_block(vector<string>& store_list, fstream& file, const int block_size){
     if(!store_list.empty()){
-        printf("SUB INDEX LIST NOT EMPTY.\n");
+        //printf("SUB INDEX LIST NOT EMPTY.\n");
         return -1;
     }
     /*file is closed, this file has been merged .
      *
      */
-    printf("load block.\n");
+    //printf("load block.\n");
 
     if(!file.is_open()){
-        printf("--------has closed!\n");
+        //printf("--------has closed!\n");
         return 1;
     }
     int size = 0;
@@ -364,7 +399,7 @@ int load_block(vector<string>& store_list, fstream& file, const int block_size){
         }
     }
     file.close();
-    printf("load finished.\n");
+    //printf("load finished.\n");
     return 0;
 }
 
@@ -373,7 +408,7 @@ int load_block(vector<string>& store_list, fstream& file, const int block_size){
  * put it into the disk.
  */
 void merge_all_block(vector<string> index_line[], string index_name, fstream index_file[], const int each_block_size){
-    printf("merge all block.\n");
+    //printf("merge all block.\n");
 
     int index_pos[index_no];
     for(short i=0; i<index_no; ++i){
@@ -392,10 +427,10 @@ void merge_all_block(vector<string> index_line[], string index_name, fstream ind
     fstream file;
     file.open(index_name, ios::out);
     if(file.fail()){
-        printf("OPEN INDEX FILE ERROR.");
+        //printf("OPEN INDEX FILE ERROR.");
         return;
     }
-    cout<<"index_name";
+    //cout<<"index_name";
     while(!remain_file.empty()){
         compare_and_write(queue, remain_file, file);
         for(auto i:remain_file){
@@ -433,9 +468,9 @@ void compare_and_write(string queue[], vector<short>& remain, fstream& index_nam
     string temp;
     vector<short>::iterator min_i;
     for(vector<short>::iterator i = remain.begin(); i != remain.end(); ++i){
-//        cout<<"QUEUE IS: "<<queue[*i]<<endl;
+//        //cout<<"QUEUE IS: "<<queue[*i]<<endl;
         if(queue[*i].compare("EOF") == 0){
-            cout<<"HAS CLOSED "<<*i<<endl;
+            //cout<<"HAS CLOSED "<<*i<<endl;
             remain.erase(i);
             return;
         }
@@ -483,9 +518,9 @@ string get_value(string line){
         }
     }
 #ifdef MERGE_DEBUG_GET_VALUE
-    cout<<"LINE IS: "<<line<<endl;
-    cout<<"COUNT: "<<count<<endl;
-    cout<<"SUB STRING: "<<line.substr(count, line.size() - count + 1)<<endl;
+    //cout<<"LINE IS: "<<line<<endl;
+    //cout<<"COUNT: "<<count<<endl;
+    //cout<<"SUB STRING: "<<line.substr(count, line.size() - count + 1)<<endl;
 #endif
     return line.substr(count, line.size() - count + 1);
 }
@@ -518,51 +553,60 @@ multimap<int, int> search_word(string pattern[], fstream& file, short len) {
     long long start = 0;
     vector<pair<int, int>> result[len];
     multimap<int, int> file_result;
-    cout<<"search word LEN:"<<len<<endl;
+    //cout<<"search word LEN:"<<len<<endl;
     for (short i = 0; i < len; ++i) {
         string a = search_pattern(start, end, file, pattern[i]);
+        //cout<<"string line"<< i<< "is: "<<a<<endl;
         if (a.empty())
             return file_result;
         result[i] = split(get_value(a));
     }
 
-    cout<<"RESULT SIZE: "<<result->size()<<endl;
+    //cout<<"RESULT SIZE: "<<result->size()<<endl;
     file_result = check_file(result, len);
 
     return file_result;
 }
 
 multimap<int, int> check_file(vector<pair<int,int>> result[], short len){
-    cout<<"CHECK FILE\n";
+    //cout<<"CHECK FILE\n";
     short num[len];
     vector<pair<int, int>> all;
     for(int i= 0; i<len; i++){
         num[i] = 0;
     }
     multimap<int, int> ret;
+    //cout<<"RESUlt is :"<<endl;
+    for(int i=0;i<len;i++){
+        for(auto j = result[i].begin(); j != result[i].end(); j++){
+            //cout<<j->first<<"-"<<j->second<<" ";
+        }
+        //cout<<endl;
+    }
     for(short i=0; i<result[0].size(); i++){
         bool in = true;
         int temp_value = result[0][i].second;
         for(short j=1; j<len; j++){
             if(!contain(result[j], num[j], result[0][i].first)){
-                //  cout<<"NOT CONTAIN\n";
+                //  //cout<<"NOT CONTAIN\n";
                 in = false;
                 break;
             }
             temp_value += result[j][num[j]].second;
         }
         if(in) {
-            cout<<"IN: "<<result[0][i].first<<endl;
+            //cout<<"IN: "<<result[0][i].first<<endl;
             ret.insert(pair<int, int>(temp_value, result[0][i].first));
         }
     }
-    cout<<"FINSH"<<endl;
+    //cout<<"FINSH"<<endl;
     return ret;
 }
 
 bool contain(vector<pair<int,int>> result, short& pos, int compare){
+    //cout<<"P: "<<pos<<" size: "<<result.size()<<endl;
     if(pos >= result.size()){
-        cout<<"OUT OF RANGE"<<endl;
+        //cout<<"OUT OF RANGE, POS is "<<pos<<" size is"<<result.size()<<endl;
         return false;
     }
     for(; pos<result.size();){
@@ -578,7 +622,7 @@ bool contain(vector<pair<int,int>> result, short& pos, int compare){
 
 
 string search_pattern(long long start, long long end, fstream& file, string pattern){
-    cout<<"SEARCH PATTERN\n";
+    //cout<<"SEARCH PATTERN\n";
     string word;
     if ((end - start) < 100){
         file.seekg(start, ios::beg);
@@ -595,10 +639,10 @@ string search_pattern(long long start, long long end, fstream& file, string patt
     getline(file, word);
     getline(file, word);
     string key = get_key(word);
-    //   cout<<"PATTERN: "<<pattern<<"  search: "<<key<<endl;
+    //   //cout<<"PATTERN: "<<pattern<<"  search: "<<key<<endl;
     short compare = key.compare(pattern);
     if(compare == 0){
-        //       cout<<"RETURN: "<<word<<endl;
+        //       //cout<<"RETURN: "<<word<<endl;
         return word;
     }
     if(compare > 0){
@@ -616,7 +660,8 @@ vector<pair<int,int>>  split(string str){
     stringstream ss(str); // Insert the string into a stream
 
     vector<pair<int,int>> tokens; // Create vector to hold our words
-    pair<int, int> temp, word;
+    pair<int, int> word = pair<int, int> (-1,0);
+    pair<int, int> temp;
 
     while (ss >> temp.first and ss>>temp.second){
         if(word.first == temp.first){
@@ -630,4 +675,13 @@ vector<pair<int,int>>  split(string str){
 }
 
 
-/
+/*
+ * Concept search.
+ * roughly idea:
+ *      use word net.synsets(), get all syn set of the word   |
+ *          normalized result by synsets('word')              |  first loop
+ *          get all synset.hypernyms()                        |
+ *
+ *      if the parameter of concept search is large, do more loops.
+ */
+
