@@ -46,12 +46,13 @@ void merge_index(string index_name);
 string search_pattern(long long start, long long end, fstream& file, string pattern);
 vector<pair<int,int>>  split(string str);
 bool contain(vector<pair<int,int>> result, short& pos, int compare);
-multimap<int, int> check_file(vector<pair<int,int>> result[], short len);
+multimap<int, int> check_file(vector<pair<int,int>> result[], short len,  bool concept = false, float rate=0);
 multimap<int, int> search_word(string pattern[], fstream& file, short len);
 string clean_path(string path);
 void trans_stem(string& word);
 float abs_length(string line);
 float concept_compare(string line, vector<pair<int,int>>& pattern, int line_total);
+void concept_search(string pattern[], fstream& index_file, short len);
 
 int memory_counter = 0; //counter: after run out of memory, write sub index into disk.
 int index_no = 0;//counter: record  the number of index.
@@ -141,20 +142,21 @@ int main(int argc, char* argv[]) {
 
     ////cout<<"PATH IS: "<<path<<endl;
     vector<string> files = get_all_files(path);
-    sort(files.begin(), files.end() );
 #ifndef MERGE_TEXT
 
-    if(!access(folder_prefix.c_str(), F_OK)){
+    if(access(folder_prefix.c_str(), F_OK) == -1){
 
-        cout<<"FOLDER IS:"<<folder_prefix<<endl;
+        cout<<"No FOLDER IS:"<<folder_prefix<<endl;
         mkdir(folder_prefix.c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
     }
 
     string merge_index_name = "fengyu.index";
 
     ifstream infile((folder_prefix + merge_index_name).c_str());
-    if(!infile.good())
+    if(!infile.good()) {
+        cout<<"NO INDEX FILE"<<endl;
         create_index(files, merge_index_name);
+    }
 #else
     index_no = 13;  //test for merge index
     //printf("start merge index.\n");
@@ -199,6 +201,8 @@ int main(int argc, char* argv[]) {
     }
 #endif
 //    trans_concept();
+    concept_search(word, file, word_len);
+
     return 0;
 }
 
@@ -613,7 +617,7 @@ multimap<int, int> search_word(string pattern[], fstream& file, short len) {
     return file_result;
 }
 
-multimap<int, int> check_file(vector<pair<int,int>> result[], short len){
+multimap<int, int> check_file(vector<pair<int,int>> result[], short len, bool concept = false, float rate=0){
     //cout<<"CHECK FILE\n";
     short num[len];
     vector<pair<int, int>> all;
@@ -635,7 +639,10 @@ multimap<int, int> check_file(vector<pair<int,int>> result[], short len){
         }
         if(in) {
             //cout<<"IN: "<<result[0][i].first<<endl;
-            ret.insert(pair<int, int>(temp_value, result[0][i].first));
+            if(!concept)
+                ret.insert(pair<int, int>(temp_value, result[0][i].first));
+            else
+                ret.insert(pair<int, int>(result[0][i].first, rate*temp_value));
         }
     }
     return ret;
@@ -750,12 +757,20 @@ void concept_search(string pattern[], fstream& index_file, short len){
         for(short i=0; i < len; ++i){
             if(pattern[i] == "!") continue;
 
-            if(concept_compare(line, result[i], sum[i]) > 0.8){
-                concept_match[i].push_back(line);
+            if(concept_compare(line, result[i], sum[i]) > 0.003){ //cos theta
+#ifdef CONCEPT_DEBUG
+                cout<<i<<" " <<pattern[i]<<" ";
+#endif
+                concept_match[i].push_back(get_key(line));
             }
         }
     }
-    
+    multimap<int, int> cocept_result;
+
+    for(short i=0; i<len; i++){
+
+    }
+
 }
 
 float concept_compare(string line, vector<pair<int,int>>& pattern, int line_total){
@@ -765,41 +780,36 @@ float concept_compare(string line, vector<pair<int,int>>& pattern, int line_tota
     pair<int, int> now;
     string word;
     ss >> word;
+    if (word.length() <= 3){ //to get rid of (am is are....). dummy stop word...
+        return 0;
+    }
+    float result = 0;
+    vector<pair<int, int>>::iterator pos = pattern.begin();
+    while (ss >> now.first and ss>>now.second and pos != pattern.end()){
 
-    float result;
-    int pos;
-    while (ss >> now.first and ss>>now.second and pos < pattern.size()){
-
-        while(pattern[pos].first < now.first){
+        while(pos->first < now.first and pos != pattern.end()){
             pos++;
-            if(pos >= pattern.size())
-                break;
         }
-        if(pattern[pos].first > now.first)
+        if(pos != pattern.end() and pos->first > now.first)
             continue;
-        result += (now.second * pattern[pos].second);
+        result += (now.second * pos->second);
     }
 
-    return result/(patt_total*line_total);
+    result = (result/(patt_total*line_total));
+#ifdef CONCEPT_DEBUG
+    if(result > 0.003){
+        cout<<word<<" "<< result<<" "<< patt_total<<" "<<line_total<<endl;
+    }
+#endif
+    return result;
 }
 
 float abs_length(string line){
     stringstream ss(line); // Insert the string into a stream
-
+    vector<pair<int, int>> a = split(get_value(line));
     float sum;
-    pair<int, int> temp = pair<int, int> (-1,0);
-    pair<int, int> now;
-    string word;
-    ss >> word;
-    while (ss >> now.first and ss>>now.second){
-        if(now.first == temp.first){
-            temp.second += now.second;
-            continue;
-        }
-        if(temp.first != -1){
-            sum += (temp.second * temp.second);
-        }
-        temp = now;
+    for( vector<pair<int, int>>::iterator i=a.begin(); i != a.end(); ++i){
+        sum += (i->second * i->second);
     }
-    return sqrt(sum);
+    return sum;
 }
