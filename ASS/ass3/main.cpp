@@ -9,6 +9,11 @@
 #include <sstream>
 #include <unordered_map>
 #include <string>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <set>
 //
 extern "C"{
 #include "stmr.h"
@@ -23,7 +28,7 @@ using namespace std;
 #define CREATE_INDEX_DEBUG
 #define INPUT_DEBUG
 
-#define ALL_READ_BLOCK_SIZE 15000000
+#define ALL_READ_BLOCK_SIZE 10000000
 void add_one(map<string, vector<pair<int, int>>>& index, string word, int file_no);
 int create_index(vector<string> file_list, string merge_index_name);
 void update_index(map<string, vector<pair<int, int>>>& index, string files, short file_no);
@@ -45,11 +50,12 @@ multimap<int, int> check_file(vector<pair<int,int>> result[], short len);
 multimap<int, int> search_word(string pattern[], fstream& file, short len);
 string clean_path(string path);
 void trans_stem(string& word);
-
+float abs_length(string line);
+float concept_compare(string line, vector<pair<int,int>>& pattern, int line_total);
 
 int memory_counter = 0; //counter: after run out of memory, write sub index into disk.
 int index_no = 0;//counter: record  the number of index.
-
+string folder_prefix;
 
 struct field_reader: std::ctype<char> {
     field_reader(std::string const &s): std::ctype<char>(get_table(s)) {}
@@ -95,7 +101,12 @@ int main(int argc, char* argv[]) {
     ////cout<<word_len<<endl;
     string path = argv[1];
     string word[word_len];
-    string merge_index_name = argv[2];
+    for(int i=0;i<argc;i++){
+        cout<<i<<" "<<argv[i]<<endl;
+    }
+    folder_prefix = argv[2];
+    folder_prefix += "/";
+    cout<<"FOLDER IS:"<<folder_prefix<<endl;
     for(int i= 0; i<word_len; i++){
         if(concept)
             word[i] = argv[5 + i];
@@ -130,8 +141,18 @@ int main(int argc, char* argv[]) {
 
     ////cout<<"PATH IS: "<<path<<endl;
     vector<string> files = get_all_files(path);
+    sort(files.begin(), files.end() );
 #ifndef MERGE_TEXT
-    ifstream infile(merge_index_name.c_str());
+
+    if(!access(folder_prefix.c_str(), F_OK)){
+
+        cout<<"FOLDER IS:"<<folder_prefix<<endl;
+        mkdir(folder_prefix.c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
+    }
+
+    string merge_index_name = "fengyu.index";
+
+    ifstream infile((folder_prefix + merge_index_name).c_str());
     if(!infile.good())
         create_index(files, merge_index_name);
 #else
@@ -145,7 +166,7 @@ int main(int argc, char* argv[]) {
 #endif
 
     fstream file;
-    file.open(merge_index_name.c_str(), ios::in|ios::out);
+    file.open((folder_prefix + merge_index_name).c_str(), ios::in|ios::out);
     if(!file.good()){
         //cout<<endl;
         return -1;
@@ -163,15 +184,34 @@ int main(int argc, char* argv[]) {
 
 
 //    //cout<<"search finish"<<endl;
+    set<pair<int, int>> res;
     for (multimap<int, int>::iterator i = result.end(); i != result.begin();) {
         i--;
-        cout<<clean_path(files[i->second])<<" "<<endl;
+        res.insert(pair<int, int>(i->first, -i->second));
+    }
+
+    for (set<pair<int, int>>::iterator i = res.end(); i != res.begin();) {
+        i--;
+        cout << clean_path(files[-i->second]) << " " << i->first  << endl;
+    }
+    if(result.empty()){
+        cout<<endl;
     }
 #endif
 //    trans_concept();
     return 0;
 }
 
+bool stringCompare( const string &left, const string &right ){
+    for( string::const_iterator lit = left.begin(), rit = right.begin(); lit != left.end() && rit != right.end(); ++lit, ++rit )
+        if( tolower( *lit ) < tolower( *rit ) )
+            return true;
+        else if( tolower( *lit ) > tolower( *rit ) )
+            return false;
+    if( left.size() < right.size() )
+        return true;
+    return false;
+}
 string clean_path(string path){
     string temp;
     for(auto i:path){
@@ -199,7 +239,6 @@ int create_index(vector<string> file_list, string merge_index_name){
         index.clear();
     }
 
-    //printf("start merge index.\n");
     merge_index(merge_index_name);
 
 }
@@ -227,6 +266,9 @@ void update_index(map<string, vector<pair<int, int>>>& index, string files, shor
 #ifndef CREATE_INDEX_DEBUG
         //cout<<word<<" ";
 #endif
+        if(word.length() < 3)
+            continue;
+
         transform(word.begin(), word.end(), word.begin(), ::tolower);
         string temp_word = word;
         char *cstr = &word[0u];
@@ -242,7 +284,7 @@ void update_index(map<string, vector<pair<int, int>>>& index, string files, shor
 /*
  * when have used all memory, write index to the disk.
  */
-        if (memory_counter>5000000){ //make sure will not run out of memory
+        if (memory_counter>8000000){ //make sure will not run out of memory
             write_index_to_file(to_string(index_no), index);
             //cout<<index_no<<" BREAK AT: "<<file_no<<endl;
             index_no++;
@@ -313,7 +355,7 @@ vector<string> get_all_files(string path) {
  */
 void write_index_to_file(string file_name, map<string, vector<pair<int, int>>>& index){
     ofstream file;
-    file.open(file_name);
+    file.open(folder_prefix + file_name);
     if(file.fail()){
         //printf("OPEN INDEX FILE ERROR.\n");
         return;
@@ -350,7 +392,8 @@ void write_index_to_file(string file_name, map<string, vector<pair<int, int>>>& 
 void merge_index(string index_name){
 
     if (index_no == 1){ //if only have one index, just rename it and return.
-        rename("0", index_name.c_str());
+        string trans_name = folder_prefix + "0";
+        rename(trans_name.c_str(), (folder_prefix + index_name).c_str());
         return;
     }
     const int each_block_size = ALL_READ_BLOCK_SIZE/index_no; //set buffer fir each sub index file;
@@ -359,8 +402,8 @@ void merge_index(string index_name){
     vector<string> index_line[index_no];    //store the line in each index file;
 
     for(int i=0; i<index_no; ++i){
-        //printf("index: initialized.\n");
-        string temp_index = to_string(i);
+        printf("index: initialized.\n");
+        string temp_index = folder_prefix + to_string(i);
         index_file[i].open(temp_index.c_str(), fstream::in);
         load_block(index_line[i], index_file[i], each_block_size);
     }
@@ -425,7 +468,7 @@ void merge_all_block(vector<string> index_line[], string index_name, fstream ind
     }
 
     fstream file;
-    file.open(index_name, ios::out);
+    file.open(folder_prefix + index_name, ios::out);
     if(file.fail()){
         //printf("OPEN INDEX FILE ERROR.");
         return;
@@ -471,6 +514,8 @@ void compare_and_write(string queue[], vector<short>& remain, fstream& index_nam
 //        //cout<<"QUEUE IS: "<<queue[*i]<<endl;
         if(queue[*i].compare("EOF") == 0){
             //cout<<"HAS CLOSED "<<*i<<endl;
+            int temp_name = *i;
+            remove((folder_prefix + to_string(temp_name)).c_str());
             remain.erase(i);
             return;
         }
@@ -576,13 +621,7 @@ multimap<int, int> check_file(vector<pair<int,int>> result[], short len){
         num[i] = 0;
     }
     multimap<int, int> ret;
-    //cout<<"RESUlt is :"<<endl;
-    for(int i=0;i<len;i++){
-        for(auto j = result[i].begin(); j != result[i].end(); j++){
-            //cout<<j->first<<"-"<<j->second<<" ";
-        }
-        //cout<<endl;
-    }
+
     for(short i=0; i<result[0].size(); i++){
         bool in = true;
         int temp_value = result[0][i].second;
@@ -599,7 +638,6 @@ multimap<int, int> check_file(vector<pair<int,int>> result[], short len){
             ret.insert(pair<int, int>(temp_value, result[0][i].first));
         }
     }
-    //cout<<"FINSH"<<endl;
     return ret;
 }
 
@@ -660,28 +698,108 @@ vector<pair<int,int>>  split(string str){
     stringstream ss(str); // Insert the string into a stream
 
     vector<pair<int,int>> tokens; // Create vector to hold our words
-    pair<int, int> word = pair<int, int> (-1,0);
-    pair<int, int> temp;
-
-    while (ss >> temp.first and ss>>temp.second){
-        if(word.first == temp.first){
-            temp.second += word.second;
-        }else{
-            tokens.push_back(temp);
+    pair<int, int> temp = pair<int, int> (-1,0);
+    pair<int, int> now;
+    while (ss >> now.first and ss>>now.second){
+        if(now.first == temp.first){
+            temp.second += now.second;
+            continue;
         }
-        word = temp;
+        if(temp.first != -1)
+            tokens.push_back(temp);
+        temp = now;
     }
+    if(temp.first != -1)
+        tokens.push_back(temp);
     return tokens;
 }
 
 
 /*
  * Concept search.
- * roughly idea:
- *      use word net.synsets(), get all syn set of the word   |
- *          normalized result by synsets('word')              |  first loop
- *          get all synset.hypernyms()                        |
- *
- *      if the parameter of concept search is large, do more loops.
+ *      calculate cos theta of searched word and all word.
+ *      select top10 word ...
  */
+void concept_search(string pattern[], fstream& index_file, short len){
+    string line;
 
+    index_file.seekg(0, ios::end);
+    long long end = index_file.tellg();
+    long long start = 0;
+    vector<pair<int, int>> result[len];
+    multimap<int, int> file_result;
+    float sum[len];
+
+    //cout<<"search word LEN:"<<len<<endl;
+    for (short i = 0; i < len; ++i) {
+        string a = search_pattern(start, end, index_file, pattern[i]);
+        //cout<<"string line"<< i<< "is: "<<a<<endl;
+        if (a.empty()){
+            pattern[i] = "!";
+            continue;
+        }
+        sum[i] = abs_length(a);    //pre compute length of pattern vector
+
+        result[i] = split(get_value(a));
+    }
+
+
+// get the similar word(cos<x,y> < 0.5)
+    vector<string> concept_match[len];
+    while(getline(index_file, line)){
+        for(short i=0; i < len; ++i){
+            if(pattern[i] == "!") continue;
+
+            if(concept_compare(line, result[i], sum[i]) > 0.8){
+                concept_match[i].push_back(line);
+            }
+        }
+    }
+    
+}
+
+float concept_compare(string line, vector<pair<int,int>>& pattern, int line_total){
+    stringstream ss(line);
+    int patt_total = abs_length(line);
+    pair<int, int> temp = pair<int, int> (-1,0);
+    pair<int, int> now;
+    string word;
+    ss >> word;
+
+    float result;
+    int pos;
+    while (ss >> now.first and ss>>now.second and pos < pattern.size()){
+
+        while(pattern[pos].first < now.first){
+            pos++;
+            if(pos >= pattern.size())
+                break;
+        }
+        if(pattern[pos].first > now.first)
+            continue;
+        result += (now.second * pattern[pos].second);
+    }
+
+    return result/(patt_total*line_total);
+}
+
+float abs_length(string line){
+    stringstream ss(line); // Insert the string into a stream
+
+    float sum;
+    pair<int, int> temp = pair<int, int> (-1,0);
+    pair<int, int> now;
+    string word;
+    ss >> word;
+    while (ss >> now.first and ss>>now.second){
+        if(now.first == temp.first){
+            temp.second += now.second;
+            continue;
+        }
+        if(temp.first != -1){
+            sum += (temp.second * temp.second);
+        }
+        temp = now;
+    }
+    return sqrt(sum);
+}
