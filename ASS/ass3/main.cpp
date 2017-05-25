@@ -14,21 +14,31 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <set>
-//
+
 extern "C"{
 #include "stmr.h"
 }
-//
-//extern  "C"{
-//#include "WordNet-3.0/include/wn.h"
-//}
+
 
 using namespace std;
 
-#define CREATE_INDEX_DEBUG
-#define INPUT_DEBUG
-
+//#define CREATE_INDEX_DEBUG
+//#define INPUT_DEBUG
+//#define CONCEPT_DEBUG
 #define ALL_READ_BLOCK_SIZE 10000000
+/*
+ * concept threshold is the vector angle of two word vector.
+ *
+ * each word has a vector i, i is (file, frequency) pair.
+ * when do concept searching, I go through the whole dictionary, calculte the vector angle between every
+ * word and a single search pattern, if it larger than CONCEPT_THRESHOLD, I let it be a concept search pattern.
+ */
+#define CONCEPT_THRESHOLD 0.05
+
+//if you want to check which concept word I have choose, please define CONCEPT_DEBUG.
+//#define CONCEPT_DEBUG
+
+
 void add_one(map<string, vector<pair<int, int>>>& index, string word, int file_no);
 int create_index(vector<string> file_list, string merge_index_name);
 void update_index(map<string, vector<pair<int, int>>>& index, string files, short file_no);
@@ -46,13 +56,14 @@ void merge_index(string index_name);
 string search_pattern(long long start, long long end, fstream& file, string pattern);
 vector<pair<int,int>>  split(string str);
 bool contain(vector<pair<int,int>> result, short& pos, int compare);
-multimap<int, int> check_file(vector<pair<int,int>> result[], short len,  bool concept = false, float rate=0);
+map<int, int> check_file(vector<pair<int,int>> result[], short len,  bool concept = false, float rate=0, short pos=0);
 multimap<int, int> search_word(string pattern[], fstream& file, short len);
 string clean_path(string path);
 void trans_stem(string& word);
 float abs_length(string line);
 float concept_compare(string line, vector<pair<int,int>>& pattern, int line_total);
-void concept_search(string pattern[], fstream& index_file, short len);
+multimap<int, int> concept_search(string pattern[], fstream& index_file, short len, float rate);
+void update_result(map<int, int>& concept_result, map<int, int>& final_result);
 
 int memory_counter = 0; //counter: after run out of memory, write sub index into disk.
 int index_no = 0;//counter: record  the number of index.
@@ -69,63 +80,41 @@ struct field_reader: std::ctype<char> {
     }
 };
 
-//void trans_concept(){
-//    vector<string> result;
-////    for(int i=0; i< len; i++){
-////        char news[] = result[i].c_str();
-////    }
-////    char *morphword(char *word, int pos);
-//    SynsetPtr SynPtr, next,HypePtr,hypeNext;
-//    char word[] = "apple";
-//    char *wordIn;
-//    //得到word参数的原型  
-//    if(morphstr(word,10)){
-//        wordIn = morphstr(word,10);
-//    }
-//    //cout<<"la"<<wordIn<<endl;
-//
-//}
 
 int main(int argc, char* argv[]) {
 #ifndef NAIVE_CONCEPT_SEARCH
-#ifdef INPUT_DEBUG
     bool concept = true;
     int word_len;
-
+    float rate;
     if(strcmp(argv[3], "-c") != 0){
         ////cout<<"NOT -c"<<endl;
         concept = false;
         word_len = argc - 3;
     }else{
         word_len = argc -5;
+        rate = stof(argv[4]);
     }
     ////cout<<word_len<<endl;
     string path = argv[1];
     string word[word_len];
-    for(int i=0;i<argc;i++){
-        cout<<i<<" "<<argv[i]<<endl;
-    }
+//    for(int i=0;i<argc;i++){
+//        cout<<i<<" "<<argv[i]<<endl;
+//    }
     folder_prefix = argv[2];
     folder_prefix += "/";
-    cout<<"FOLDER IS:"<<folder_prefix<<endl;
+//    cout<<"FOLDER IS:"<<folder_prefix<<endl;
     for(int i= 0; i<word_len; i++){
         if(concept)
             word[i] = argv[5 + i];
         else
             word[i] = argv[3+i];
         trans_stem(word[i]);
-        ////cout<<i<<"  "<<word[i]<<endl;
     }
 
-
-
-#endif
-    ////cout<<"start"<<endl;
- //   vector<string> files = get_all_files("../asset/books200m");
     map<string, vector<pair<int, int>>> index;
 
 
-#ifndef CREATE_INDEX_DEBUG
+#ifdef CREATE_INDEX_DEBUG
     files.push_back("../asset/simple/file1.txt");
     files.push_back("../asset/simple/file2.txt");
     files.push_back("../asset/simple/file3.txt");
@@ -142,19 +131,21 @@ int main(int argc, char* argv[]) {
 
     ////cout<<"PATH IS: "<<path<<endl;
     vector<string> files = get_all_files(path);
+    for(auto i = 0; i < files.size();i++){
+        if(clean_path(files[i]).compare("10226_10226.txt") ==0)
+            cout<<i<<endl;
+    }
 #ifndef MERGE_TEXT
 
     if(access(folder_prefix.c_str(), F_OK) == -1){
 
-        cout<<"No FOLDER IS:"<<folder_prefix<<endl;
+   //     cout<<"No FOLDER IS:"<<folder_prefix<<endl;
         mkdir(folder_prefix.c_str(), S_IRWXU|S_IRWXG|S_IRWXO);
     }
 
     string merge_index_name = "fengyu.index";
-
     ifstream infile((folder_prefix + merge_index_name).c_str());
     if(!infile.good()) {
-        cout<<"NO INDEX FILE"<<endl;
         create_index(files, merge_index_name);
     }
 #else
@@ -166,7 +157,6 @@ int main(int argc, char* argv[]) {
 //    search(pattern);
 #endif
 #endif
-
     fstream file;
     file.open((folder_prefix + merge_index_name).c_str(), ios::in|ios::out);
     if(!file.good()){
@@ -174,18 +164,13 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-//    if(concept){
-//        vector<string> concept_word = trans_concept(word, depth);
-//        string temp_word[concept_word.size()];
-//        for(auto i; i< concept_word.size(); i++){
-//            temp_word[i] = concept_word[i];
-//        }
-//        multimap<int, int> concept_result = search_word(temp_word, file, (short)concept_word.size());
-//    }
-    multimap<int, int> result = search_word(word, file, (short)word_len);
+    multimap<int, int> result;
+    if(concept)
+        result = concept_search(word, file, word_len, rate);
+    else
+        result = search_word(word, file, (short)word_len);
 
 
-//    //cout<<"search finish"<<endl;
     set<pair<int, int>> res;
     for (multimap<int, int>::iterator i = result.end(); i != result.begin();) {
         i--;
@@ -194,14 +179,12 @@ int main(int argc, char* argv[]) {
 
     for (set<pair<int, int>>::iterator i = res.end(); i != res.begin();) {
         i--;
-        cout << clean_path(files[-i->second]) << " " << i->first  << endl;
+        cout << clean_path(files[-i->second])<<endl;
     }
     if(result.empty()){
         cout<<endl;
     }
 #endif
-//    trans_concept();
-    concept_search(word, file, word_len);
 
     return 0;
 }
@@ -230,7 +213,7 @@ string clean_path(string path){
 int create_index(vector<string> file_list, string merge_index_name){
     map<string, vector<pair<int, int>>> index;
     for(short i=0; i < file_list.size(); ++i){
-#ifndef CREATE_INDEX_DEBUG
+#ifdef CREATE_INDEX_DEBUG
         //cout<<file_list[i]<<endl;
 #endif
         update_index(index, file_list[i], i);
@@ -265,9 +248,8 @@ void update_index(map<string, vector<pair<int, int>>>& index, string files, shor
     }
     divider += '~';
     file.imbue(std::locale(std::locale(), new field_reader(divider)));
-
     while(file>>word){
-#ifndef CREATE_INDEX_DEBUG
+#ifdef CREATE_INDEX_DEBUG
         //cout<<word<<" ";
 #endif
         if(word.length() < 3)
@@ -279,8 +261,8 @@ void update_index(map<string, vector<pair<int, int>>>& index, string files, shor
         cstr[stem(cstr, 0, word.size() -1) + 1] = 0;
         word = string(cstr);
 
-#ifndef CREATE_INDEX_DEBUG
-        if(word.compare(temp_word) != 0)
+#ifdef CREATE_INDEX_DEBUG
+       // if(word.compare(temp_word) != 0)
             //cout<<temp_word<<" "<<word<<endl;
         //cout<<word<<endl;
 #endif
@@ -344,7 +326,7 @@ vector<string> get_all_files(string path) {
     while (pdir = readdir(dir)) {
 //        //cout<<pdir->d_name<<endl;
         if(pdir->d_name[0] == '.') continue;
-#ifndef INPUT_DEBUG
+#ifdef INPUT_DEBUG
         //cout<<"THIS IS "<<pdir->d_name<<endl;
 #endif
         files.push_back(path + '/' + pdir->d_name);
@@ -406,7 +388,6 @@ void merge_index(string index_name){
     vector<string> index_line[index_no];    //store the line in each index file;
 
     for(int i=0; i<index_no; ++i){
-        printf("index: initialized.\n");
         string temp_index = folder_prefix + to_string(i);
         index_file[i].open(temp_index.c_str(), fstream::in);
         load_block(index_line[i], index_file[i], each_block_size);
@@ -519,7 +500,7 @@ void compare_and_write(string queue[], vector<short>& remain, fstream& index_nam
         if(queue[*i].compare("EOF") == 0){
             //cout<<"HAS CLOSED "<<*i<<endl;
             int temp_name = *i;
-            remove((folder_prefix + to_string(temp_name)).c_str());
+           // remove((folder_prefix + to_string(temp_name)).c_str());
             remain.erase(i);
             return;
         }
@@ -535,7 +516,7 @@ void compare_and_write(string queue[], vector<short>& remain, fstream& index_nam
             continue;
         }
 
-        if(temp.compare(min_str) == 0){               //if two is equal merge them to a new set.
+        if(temp.compare(min_str) == 0){               //if two are equal merge them to a new set.
             merge_string(queue[*min_i], queue[*i]);
         }
     }
@@ -544,7 +525,13 @@ void compare_and_write(string queue[], vector<short>& remain, fstream& index_nam
 
 
 void merge_string(string& a, string& b){
+    if(get_value(a).compare("pear") == 0){
+        cout<<1<<a<<" "<<b<<endl;
+    }
     a = get_key(a) + get_value(a) + get_value(b);
+    if(get_value(a).compare("pear") == 0){
+        cout<<2<<a<<" "<<b<<endl;
+    }
     b.clear();
 }
 
@@ -602,6 +589,7 @@ multimap<int, int> search_word(string pattern[], fstream& file, short len) {
     long long start = 0;
     vector<pair<int, int>> result[len];
     multimap<int, int> file_result;
+
     //cout<<"search word LEN:"<<len<<endl;
     for (short i = 0; i < len; ++i) {
         string a = search_pattern(start, end, file, pattern[i]);
@@ -612,19 +600,21 @@ multimap<int, int> search_word(string pattern[], fstream& file, short len) {
     }
 
     //cout<<"RESULT SIZE: "<<result->size()<<endl;
-    file_result = check_file(result, len);
-
+    map<int, int> temp_result = check_file(result, len);
+    for(auto i=temp_result.begin(); i!=temp_result.end(); i++){
+        file_result.insert(pair<int, int>(i->second, i->first));
+    }
     return file_result;
 }
 
-multimap<int, int> check_file(vector<pair<int,int>> result[], short len, bool concept = false, float rate=0){
+map<int, int> check_file(vector<pair<int,int>> result[], short len, bool concept, float rate, short pos){
     //cout<<"CHECK FILE\n";
     short num[len];
     vector<pair<int, int>> all;
     for(int i= 0; i<len; i++){
         num[i] = 0;
     }
-    multimap<int, int> ret;
+    map<int, int> ret;
 
     for(short i=0; i<result[0].size(); i++){
         bool in = true;
@@ -635,14 +625,14 @@ multimap<int, int> check_file(vector<pair<int,int>> result[], short len, bool co
                 in = false;
                 break;
             }
-            temp_value += result[j][num[j]].second;
+            if(j == pos and concept)
+                temp_value += rate*result[j][num[j]].second;
+            else
+                temp_value += result[j][num[j]].second;
         }
         if(in) {
             //cout<<"IN: "<<result[0][i].first<<endl;
-            if(!concept)
-                ret.insert(pair<int, int>(temp_value, result[0][i].first));
-            else
-                ret.insert(pair<int, int>(result[0][i].first, rate*temp_value));
+            ret.insert(pair<int, int>(result[0][i].first, temp_value));
         }
     }
     return ret;
@@ -727,7 +717,7 @@ vector<pair<int,int>>  split(string str){
  *      calculate cos theta of searched word and all word.
  *      select top10 word ...
  */
-void concept_search(string pattern[], fstream& index_file, short len){
+multimap<int, int> concept_search(string pattern[], fstream& index_file, short len, float rate){
     string line;
 
     index_file.seekg(0, ios::end);
@@ -753,24 +743,47 @@ void concept_search(string pattern[], fstream& index_file, short len){
 
 // get the similar word(cos<x,y> < 0.5)
     vector<string> concept_match[len];
+    float temp_cos = 0;
     while(getline(index_file, line)){
         for(short i=0; i < len; ++i){
             if(pattern[i] == "!") continue;
 
-            if(concept_compare(line, result[i], sum[i]) > 0.003){ //cos theta
+            if(concept_compare(line, result[i], sum[i]) > CONCEPT_THRESHOLD){ //cos theta
 #ifdef CONCEPT_DEBUG
                 cout<<i<<" " <<pattern[i]<<" ";
 #endif
-                concept_match[i].push_back(get_key(line));
+                concept_match[i].push_back(get_value(line));
             }
         }
     }
-    multimap<int, int> cocept_result;
+    map<int, int> concept_result;
+    map<int, int> final_result;
+    vector<pair<int, int>> temp_pattern[len];
+    for(short j=0; j<len; j++) //initialized concept pattern and searched pattern.
+        temp_pattern[j] = result[j];
 
     for(short i=0; i<len; i++){
-
+        for(short j=0; j<concept_match[i].size(); j++){
+            temp_pattern[i] = split(concept_match[i][j]);//replace a search pattern with the most similar pattern.
+            concept_result = check_file(temp_pattern, len, true,  rate, j);
+            update_result(concept_result, final_result);
+        }
+        temp_pattern[i] = result[i];
     }
+    concept_result = check_file(result, len);
+    update_result(concept_result, final_result);
+    multimap<int, int> ret_result;
+    for(auto i=final_result.begin();i != final_result.end(); i++){
+        ret_result.insert(pair<int, int>(i->second, i->first));
+    }
+    return ret_result;
+}
 
+
+void update_result(map<int, int>& concept_result, map<int, int>& final_result){
+    for(auto i=concept_result.begin(); i != concept_result.end();i++){
+        final_result[i->first] += i->second;
+    }
 }
 
 float concept_compare(string line, vector<pair<int,int>>& pattern, int line_total){
@@ -781,6 +794,9 @@ float concept_compare(string line, vector<pair<int,int>>& pattern, int line_tota
     string word;
     ss >> word;
     if (word.length() <= 3){ //to get rid of (am is are....). dummy stop word...
+        return 0;
+    }
+    if(word.compare("where") & word.compare("which") & word.compare("whose") == 0 ){
         return 0;
     }
     float result = 0;
@@ -797,7 +813,7 @@ float concept_compare(string line, vector<pair<int,int>>& pattern, int line_tota
 
     result = (result/(patt_total*line_total));
 #ifdef CONCEPT_DEBUG
-    if(result > 0.003){
+    if(result > CONCEPT_THRESHOLD){
         cout<<word<<" "<< result<<" "<< patt_total<<" "<<line_total<<endl;
     }
 #endif
@@ -813,3 +829,4 @@ float abs_length(string line){
     }
     return sum;
 }
+
